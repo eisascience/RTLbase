@@ -1,0 +1,63 @@
+#exportPattern("^[[:alpha:]]+")
+
+export(
+  #RTL FXs-----------
+      'alg1_baselineClass',
+      'alg2_CalcMore',
+      'alg2_rob_meanNCov',
+      'alg3_shiftComp',
+      'alg4_BiasUpdate',
+      'alg6_NormalVectorUpdate',
+      'FinalViz',
+      'KBand_fx', #alg5
+      'IndicatorFX',
+      'find_peaks',
+      'Mode',
+      'SmartMinimaAk',
+      'CriticalPointsX',
+      'inflect',
+      'argmax',
+      'SpecializedGD2D',
+      'ClosingWindowAproxFunOptimizedMinima',
+      'ColorTheme',
+      #'DF2KfoldBYClass', #used to be KfoldperGeneListV2
+      'DF2TrainTestls',
+
+
+
+
+  #end RTL Fxs
+
+       'svm', #from the e1071 package
+       'confusionMatrix', #from the caret package
+       'rbindlist', #from data.table package
+       'melt', #from data.table
+       'CovEM', #from GSE package
+       'ggplot', #from ggplot2
+       'aes', #from ggplot2
+       'geom_point',#from ggplot2
+       'theme_bw',#from ggplot2
+       'theme',#from ggplot2
+       'labs',#from ggplot2
+       'element_text',#from ggplot2
+       'ggsave',#from ggplot2
+       'facet_wrap',#from ggplot2
+       'scale_colour_manual',#from ggplot2
+       'ylim',#from ggplot2
+       'xlim',#from ggplot2
+       'element_blank',#from ggplot2
+       'geom_violin',#from ggplot2
+       'geom_bar',#from ggplot2
+       'geom_errorbar',#from ggplot2
+       'position_dodge',#from ggplot2
+       'scale_fill_manual',#from ggplot2
+       'as.data.table',
+       'brewer.pal.info',
+       'brewer.pal'
+       )
+import('e1071',
+       'caret',
+       'data.table',
+       'GSE',
+       'ggplot2',
+       'RColorBrewer')
