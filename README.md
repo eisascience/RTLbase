@@ -5,12 +5,13 @@
 -----------
 
 Author/Maintainer: Eisa Mahyari
+
 Twitter: @eisamahyari
+
 URL: https://github.com/eisascience/RTLbase
 
 -----------
-Current Development: RTLbase v1.0.0
-Full Package: RTL v1.0.0
+Current Development: RTLbase v1.0.0, a sub-package of RTL v1.0.0
 
 A transductive transfer learning (TL) classification framework, that adapts generalized linear classification hyperplane obtained on training data to the previously unseen testing data to identify distinct classes; specifically, subsets of cells defined by a phenotype or a signature from flow-based and transcriptomic single-cell assays.
 
