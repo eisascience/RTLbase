@@ -1,6 +1,8 @@
 # RTLbase
 ## The R Transfer Learning (RTL) Classification Framework - Baseline Implementation v1.0.0
-### DOI: 10.5281/zenodo.2094074 
+
+<a href="https://zenodo.org/badge/latestdoi/160988086"><img src="https://zenodo.org/badge/160988086.svg" alt="DOI"></a>
+
 
 -----------
 
