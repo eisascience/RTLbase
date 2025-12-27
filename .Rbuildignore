@@ -1,0 +1,8 @@
+^\\.Rproj\\.user$
+^RTLbase\\.Rproj$
+^\\.lintr$
+^\\.styler$
+^README\\.md$
+^NEWS\\.md$
+^\\.github$
+^Vignettes$
