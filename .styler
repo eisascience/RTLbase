@@ -1,0 +1,5 @@
+style_guide_attributes <- styler::tidyverse_style(
+  indent_by = 2,
+  strict = TRUE,
+  start_comments_with_one_space = TRUE
+)

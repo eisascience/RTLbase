@@ -1,0 +1,30 @@
+Package: RTLbase
+Title: R Transfer Learning Baseline Classification Framework
+Version: 1.0.0
+Authors@R: c(
+    person("Eisa", "Mahyari", role = c("aut", "cre"), email = "contact@rtlbase.example")
+  )
+Description: Implements a baseline set of transfer learning classification utilities
+    for flow and transcriptomic single-cell assays, including visualization and
+    helper functions for training and evaluating classifiers.
+License: MIT + file LICENSE
+URL: https://github.com/eisascience/RTLbase
+BugReports: https://github.com/eisascience/RTLbase/issues
+Depends: R (>= 4.1.0)
+Imports:
+    caret,
+    data.table,
+    DescTools,
+    e1071,
+    GSE,
+    ggplot2,
+    gradDescent,
+    RColorBrewer
+Suggests:
+    lintr,
+    styler,
+    testthat (>= 3.0.0)
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+Config/testthat/edition: 3
