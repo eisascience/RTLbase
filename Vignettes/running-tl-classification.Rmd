@@ -1,0 +1,135 @@
+---
+title: "Running the RTL classification pipeline"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Running the RTL classification pipeline}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+This vignette demonstrates the end-to-end RTLbase workflow: training baseline
+SVMs, estimating robust hyperplane moments, applying shift and bias updates, and
+rotating the normals before visualization.
+
+## Simulate a small dataset
+
+```{r}
+library(RTLbase)
+source("R/simData.R")
+
+demo <- DemoTestTrainList2D(N = 2)
+
+train_ls <- lapply(demo, function(x) list(X.train = x$TrainX, Y.train = x$TrainY))
+test_ls  <- lapply(demo, function(x) list(X.test  = x$TestX,  Y.test  = x$TestY))
+```
+
+## 1) Baseline classifier (Algorithm 1)
+
+```{r}
+alg1 <- alg1_baselineClass(
+  TrainXls = lapply(train_ls, `[[`, "X.train"),
+  TrainYls = lapply(train_ls, `[[`, "Y.train"),
+  TestXls  = lapply(test_ls,  `[[`, "X.test"),
+  TestYls  = lapply(test_ls,  `[[`, "Y.test"),
+  K_forCrossV = 3,
+  svmGamma = 0.02,
+  svmCost = 0.5,
+  prnt2scr = TRUE,
+  X_cols2Keep = 1:2,
+  transX = FALSE,
+  sampleRed = FALSE,
+  doParalellSVM = FALSE
+)
+```
+
+## 2) Robust mean and covariance (Algorithm 2)
+
+```{r}
+alg2 <- alg2_rob_meanNCov(alg1$baselineSVM)
+```
+
+## 3) Shift compensation (Algorithm 3)
+
+```{r}
+alg3 <- alg3_shiftComp(
+  source_list = lapply(train_ls, `[[`, "X.train"),
+  task_list = lapply(test_ls,  `[[`, "X.test"),
+  alg1_result = alg1,
+  alg2_result = alg2,
+  print2screen = FALSE,
+  save2file = FALSE,
+  maximumLag = 0,
+  ImpFeats = NA,
+  CoreClassifier = "LinSVM"
+)
+```
+
+## 4) Bias update (Algorithm 4)
+
+```{r}
+alg4 <- alg4_BiasUpdate(
+  task_list = lapply(test_ls, `[[`, "X.test"),
+  alg1_result = alg1,
+  alg2_result = alg2,
+  alg3_result = alg3,
+  goodColumns = NA,
+  save2file = FALSE,
+  Marg = 1,
+  alg4MinFx = "gd",
+  CoreClassifier = "LinSVM"
+)
+```
+
+## 5) Normal vector rotation (Algorithm 6)
+
+```{r}
+alg6 <- alg6_NormalVectorUpdate(
+  task_list = lapply(test_ls, `[[`, "X.test"),
+  alg1_result = alg1,
+  alg2_result = alg2,
+  alg3_result = alg3,
+  alg4_result = alg4,
+  X_feat_cols = NA,
+  Marg = 1,
+  save2file = FALSE,
+  ADM = FALSE,
+  datatyp = "FC",
+  CoreClassifier = "LinSVM"
+)
+```
+
+## 6) Visualize outcomes
+
+```{r}
+viz <- FinalViz(
+  TrainTestSet.ls = test_ls,
+  alg1_result = alg1,
+  alg2_result = alg2,
+  alg3_result = alg3,
+  alg4_result = alg4,
+  alg6_result = alg6,
+  datatyp = "FC",
+  ADM = FALSE
+)
+
+viz$gg.figs$A
+viz$comStats.sub
+```
+
+### Tip: scaling up
+
+- Increase `K_forCrossV` after you confirm the pipeline works on two splits.
+- For large feature sets, narrow `X_cols2Keep` to the most informative
+  channels before shifting or bias updates.
+- Enable `save2file = TRUE` to keep PNG summaries when running long jobs on
+  multiple tasks.

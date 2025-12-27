@@ -3,6 +3,31 @@
 
 
 
+#' Train baseline SVM classifiers for multiple source datasets
+#'
+#' @description
+#' Fits a linear SVM for each source dataset and returns the learned hyperplane
+#' parameters along with cross-validation diagnostics. This is the entry point
+#' for initializing the RTL workflow before transfer learning adjustments are
+#' applied.
+#'
+#' @param TrainXls List of training feature matrices (one per source dataset).
+#' @param TrainYls List of training labels aligned to `TrainXls`.
+#' @param TestXls List of test feature matrices (one per target task).
+#' @param TestYls List of test labels aligned to `TestXls`.
+#' @param K_forCrossV Number of folds for internal SVM cross-validation.
+#' @param svmGamma Radial basis gamma parameter passed to `e1071::svm`.
+#' @param svmCost Cost parameter passed to `e1071::svm`.
+#' @param prnt2scr Logical; print progress to the console.
+#' @param X_cols2Keep Column indices to retain from the feature matrices.
+#' @param transX Logical; apply additional transformations via `RTL::AllDataManipulations`.
+#' @param sampleRed Optional integer sample size for down-sampling during training.
+#' @param doParalellSVM Logical; use a parallelized SVM fit when `TRUE`.
+#' @param datatyp Character flag indicating data type (e.g., `"FC"` for flow cytometry).
+#'
+#' @return A list containing the baseline hyperplanes, per-dataset results, and
+#'   metadata (number of datasets and dimensions).
+#' @export
 alg1_baselineClass <- function(TrainXls,
                                TrainYls,
                                TestXls,
@@ -184,7 +209,6 @@ alg1_baselineClass <- function(TrainXls,
               nDims = nDims))
 
 }
-
 
 
 

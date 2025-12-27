@@ -1,4 +1,12 @@
-
+#' Build a qualitative color palette for RTL visuals
+#'
+#' @description
+#' Generates qualitative and sequential color palettes used across RTL plotting
+#' routines.
+#'
+#' @return A list containing `col_vector` (qualitative palette) and
+#'   `scaleyellowred` (sequential palette).
+#' @export
 ColorTheme <- function(){
   #scaleyellowred <- colorRampPalette(c("lightyellow", "red"), space = "rgb")(100)
   scaleyellowred <- colorRampPalette(c("dodgerblue", "lightyellow", "red"), space = "rgb")(30)
@@ -20,11 +28,23 @@ conf.mat.stats <- function(conf.mat.pred, conf.mat.truth, POS="1"){
 }
 
 
+#' Compute the statistical mode of a vector
+#'
+#' @param x Vector of values.
+#'
+#' @return The most frequent value in `x`.
+#' @export
 Mode <- function(x) {
   ux <- unique(x)
   ux[which.max(tabulate(match(x, ux)))]
 }
 
+#' Convert logical flags to indicator values
+#'
+#' @param x Logical value to convert.
+#'
+#' @return `1` when `x` is `TRUE`, `0` when `FALSE`; otherwise prints a warning.
+#' @export
 IndicatorFX <- function(x){
   if(x==T) return(1)
   if(x==F) return(0)
@@ -40,11 +60,18 @@ is.even <- function(x){
   x%%2 == 0
 }
 
-
-
-
-
-
+#' Split a labelled data frame into cross-validated train/test lists
+#'
+#' @description
+#' Generates stratified K-fold splits for labelled feature data and produces
+#' paired train/test lists compatible with RTL algorithms.
+#'
+#' @param X Data frame or matrix of features.
+#' @param Y Vector or factor of class labels aligned to `X`.
+#'
+#' @return A list with `TrainXY.ls` and `TestXY.ls` elements containing per-fold
+#'   feature/label pairs.
+#' @export
 DF2TrainTestls <- function(X, Y){
   #X = BCC$PBMC
   #Y = BCC$PBMC.Class

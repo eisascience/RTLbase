@@ -41,6 +41,21 @@
 ######
 ###
 
+#' Estimate robust hyperplane moments across source models
+#'
+#' @description
+#' Computes robust mean and covariance estimates for the baseline SVM
+#' hyperplanes returned by [alg1_baselineClass()]. The routine falls back to
+#' empirical moments when robust estimation fails and augments the result with
+#' additional derived quantities.
+#'
+#' @param alg1_result_baselineSVM Matrix of hyperplane parameters from
+#'   [alg1_baselineClass()] where each row represents a source model.
+#' @param print2screen Logical; print progress updates.
+#'
+#' @return A list containing robust/simple means, covariance matrices, and
+#'   normalized vectors used by downstream algorithms.
+#' @export
 alg2_rob_meanNCov <- function(alg1_result_baselineSVM, print2screen = F){
   #alg1_result_baselineSVM <- alg1_res$baselineSVM; print2screen = T
 
@@ -146,6 +161,17 @@ alg2_rob_meanNCov <- function(alg1_result_baselineSVM, print2screen = F){
 }
 
 
+#' Compute derived statistics for Algorithm 2 results
+#'
+#' @description
+#' Post-processes the outputs from [alg2_rob_meanNCov()] to derive normalized
+#' hyperplane parameters, eigenvalues, and helper vectors that guide later RTL
+#' steps.
+#'
+#' @param alg2_res List output from [alg2_rob_meanNCov()].
+#'
+#' @return The augmented `alg2_res` list with additional normalization values.
+#' @export
 alg2_CalcMore <- function(alg2_res) {
 
   #alg2_res = list(U_simple=U, U_robust=U_robust, C_simple=C, C_robust=C_robust)
@@ -168,8 +194,6 @@ alg2_CalcMore <- function(alg2_res) {
 
   return(alg2_res)
 }
-
-
 
 
 

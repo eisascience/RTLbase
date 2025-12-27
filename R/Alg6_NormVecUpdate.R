@@ -41,6 +41,31 @@
 
 
 
+#' Update normal vectors using Algorithm 6
+#'
+#' @description
+#' Rotates the decision boundary normal vectors toward directions that maximize
+#' density support on target tasks. The routine evaluates candidate steps along
+#' principal directions and returns updated hyperplanes.
+#'
+#' @param task_list List of target task feature matrices.
+#' @param alg1_result Output list from [alg1_baselineClass()].
+#' @param alg2_result Output list from [alg2_rob_meanNCov()].
+#' @param alg3_result Vector of bias updates from [alg3_shiftComp()].
+#' @param alg4_result Data frame of bias-adjusted intercepts from
+#'   [alg4_BiasUpdate()].
+#' @param X_feat_cols Optional feature indices to retain.
+#' @param Marg Margin parameter controlling density evaluation width.
+#' @param save2file Logical; save diagnostic figures.
+#' @param ADM Logical; apply additional data manipulations.
+#' @param datatyp Character flag indicating data type (e.g., `"FC"`).
+#' @param RCSmodeBL Logical; enable rare-cell subset adjustments.
+#' @param RCSfreqSet Numeric vector specifying frequency thresholds for RCS mode.
+#' @param CoreClassifier Core classifier identifier (e.g., `"LinSVM"`).
+#'
+#' @return A list containing updated normal vectors, smoothing metadata, and key
+#'   optima explored during the search.
+#' @export
 alg6_NormalVectorUpdate <- function(task_list, alg1_result,
                                     alg2_result, alg3_result,
                                     alg4_result, X_feat_cols,
@@ -475,5 +500,4 @@ alg6_NormalVectorUpdate <- function(task_list, alg1_result,
 
 
 }
-
 

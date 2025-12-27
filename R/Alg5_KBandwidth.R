@@ -1,5 +1,16 @@
 
 
+#' Kernel bandwidth estimation for Algorithm 5
+#'
+#' @description
+#' Computes a Silverman-inspired bandwidth to smooth kernel density estimates of
+#' projection counts used in Algorithm 5.
+#'
+#' @param s_k Vector of grid locations.
+#' @param c_k Vector of counts or weights at each grid location.
+#'
+#' @return Numeric bandwidth estimate.
+#' @export
 KBand_fx <- function(s_k, c_k){
   #this is Algorithm 5, but its faster here as a fx
   #This kernel choice is motivated from the rule of thumb

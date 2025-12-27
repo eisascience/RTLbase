@@ -19,7 +19,8 @@ Imports:
     GSE,
     ggplot2,
     gradDescent,
-    RColorBrewer
+    RColorBrewer,
+    zoo
 Suggests:
     lintr,
     styler,

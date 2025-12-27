@@ -1,0 +1,91 @@
+---
+title: "Interpreting RTLbase outputs and visualizations"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Interpreting RTLbase outputs and visualizations}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+Each RTL algorithm returns a structured list with components that can be
+inspected individually. This vignette highlights the most important fields and
+how to translate them into diagnostics or figures.
+
+## Algorithm 1: training diagnostics
+
+```{r}
+alg1$resamples <- lapply(alg1$results.all, function(res) res$train$overall)
+alg1$resamples
+```
+
+`alg1$baselineSVM` is a matrix of hyperplane parameters (weights and bias) for
+each source model. It is the foundation for Algorithms 2–6.
+
+## Algorithm 2: robust moments
+
+```{r}
+alg2$U_robust       # robust mean of weights/bias
+alg2$C_robust       # robust covariance matrix
+alg2$U_robust_norm  # normalized hyperplane parameters
+alg2$v_t            # orthonormal direction of change
+```
+
+High variance in `C_robust` indicates divergent source models that may benefit
+from feature curation.
+
+## Algorithm 3: shift compensation
+
+```{r}
+alg3  # vector of task-specific bias updates
+```
+
+Large magnitude shifts suggest strong batch effects between source and target
+tasks. Consider narrowing `maximumLag` or focusing on a subset of features.
+
+## Algorithm 4: bias update
+
+```{r}
+head(alg4$b_alg_norm)
+```
+
+This data frame stores the adjusted intercept for each task along with
+intermediate density summaries (e.g., `c_j` counts and bandwidth estimates).
+
+## Algorithm 6: normal vector rotation
+
+```{r}
+head(alg6$alg6_w_new)
+```
+
+Rows correspond to tasks, and columns correspond to updated weight vectors. Pair
+these with `alg4$b_alg_norm` to build complete hyperplanes.
+
+## Visualization helpers
+
+`FinalViz()` produces ready-to-plot ggplot objects:
+
+```{r}
+viz$gg.figs$A     # combined accuracy/precision/recall plots across tasks
+viz$comStats.sub  # tidy data frame of per-task summary metrics
+```
+
+- Use `ggsave()` to persist figures from `viz$gg.figs`.
+- For per-task predictions, inspect `viz$ChangeAcross[[task_id]]$y_hat_alg6`
+  alongside `viz$ChangeAcross[[task_id]]$y_test`.
+
+## Exporting results
+
+- Persist hyperplanes for reuse: `saveRDS(list(weights = alg6$alg6_w_new,
+  bias = alg4$b_alg_norm), "hyperplanes.rds")`.
+- Combine visualization summaries with sample metadata to track performance
+  across experiments.

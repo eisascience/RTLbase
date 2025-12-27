@@ -59,6 +59,31 @@ ccfmaxV3 <- function(a, b, e=0, maxLag, useAbsCor = T)
   return(res_max)
 }
 
+#' Apply shift compensation using maximum cross-correlation
+#'
+#' @description
+#' Aligns target task projections to source datasets by estimating robust lag
+#' shifts via maximum cross-correlation between kernel density estimates. The
+#' updated intercepts are returned for downstream bias correction.
+#'
+#' @param source_list List of source feature matrices used to train the
+#'   classifiers.
+#' @param task_list List of target task feature matrices to be aligned.
+#' @param alg1_result Output list from [alg1_baselineClass()].
+#' @param alg2_result Output list from [alg2_rob_meanNCov()].
+#' @param print2screen Logical; print progress updates.
+#' @param save2file Logical; save diagnostic plots to disk.
+#' @param maximumLag Maximum lag to consider in cross-correlation.
+#' @param ImpFeats Optional vector of feature indices to retain.
+#' @param ADM Logical; apply additional data manipulations.
+#' @param datatyp Character flag indicating data type (e.g., `"FC"`).
+#' @param useAbsCor Logical; use absolute correlations when selecting lags.
+#' @param medianMediansBL Logical; use the median of medians strategy for shift
+#'   estimation.
+#' @param CoreClassifier Core classifier identifier (e.g., `"LinSVM"`).
+#'
+#' @return A numeric vector of updated intercepts per task.
+#' @export
 alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
                            print2screen, save2file, maximumLag, ImpFeats,
                            ADM=F, datatyp="FC", useAbsCor = T, medianMediansBL = F,
@@ -476,7 +501,6 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
   return(b_updated)
 
 }
-
 
 
 

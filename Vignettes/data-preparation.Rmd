@@ -1,0 +1,71 @@
+---
+title: "Data preparation with RTLbase"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Data preparation with RTLbase}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+This vignette walks through the minimal steps required to prepare data for the
+RTL transfer learning workflow. We demonstrate how to load the included B-cell
+example dataset, structure the inputs expected by the algorithms, and perform
+light preprocessing that preserves class balance.
+
+## Load the package and data
+
+```{r}
+library(RTLbase)
+
+# included example data
+bcell <- readRDS(system.file("data", "BcellClassification.rds", package = "RTLbase"))
+str(bcell)
+```
+
+The `PBMC` matrix holds transformed cytometry intensities, and `PBMC.Class`
+contains binary labels (`Pos`/`Neg`).
+
+## Create stratified train/test splits
+
+```{r}
+splits <- DF2TrainTestls(
+  X = bcell$PBMC,
+  Y = bcell$PBMC.Class
+)
+
+length(splits$TrainXY.ls)
+head(splits$TrainXY.ls[[1]]$x[, 1:5])
+```
+
+The helper keeps classes balanced across folds. Each element of `TrainXY.ls`
+and `TestXY.ls` contains an `x` matrix of features and a `y` factor of labels,
+ready for `alg1_baselineClass()`.
+
+## Preparing your own data
+
+1. Ensure rows correspond to single-cell events and columns to features (e.g.,
+   markers or genes).
+2. Convert labels into a two-level factor with values `-1/1`, `Neg/Pos`, or
+   `FALSE/TRUE`.
+3. Pass the matrices into `DF2TrainTestls()` or build lists that match its
+   output structure if you already have predefined splits.
+4. Use `X_cols2Keep` in downstream functions to exclude noisy channels without
+   mutating your original matrices.
+
+## Lightweight quality checks
+
+- Inspect per-channel ranges or densities with `apply(data, 2, summary)` and
+  `plot(density(data[, channel]))`.
+- Confirm that each class appears in every fold: `table(splits$TrainXY.ls[[1]]$y)`.
+- Keep a copy of the original data to back out any preprocessing choices that
+  reduce performance.

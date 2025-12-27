@@ -1,6 +1,28 @@
 
 
 
+#' Visualize RTL hyperplane performance across algorithms
+#'
+#' @description
+#' Compares baseline, bias-updated, and normal-vector–updated hyperplanes on
+#' held-out target tasks, generating summary statistics and ggplot visualizations
+#' for downstream reporting.
+#'
+#' @param TrainTestSet.ls List of train/test splits with `X.test` and `Y.test`
+#'   elements.
+#' @param alg1_result Output list from [alg1_baselineClass()].
+#' @param alg2_result Output list from [alg2_rob_meanNCov()].
+#' @param alg3_result Vector of bias updates from [alg3_shiftComp()].
+#' @param alg4_result Data frame of bias-adjusted intercepts from
+#'   [alg4_BiasUpdate()].
+#' @param alg6_result List from [alg6_NormalVectorUpdate()] containing updated
+#'   weights.
+#' @param datatyp Character flag indicating data type (e.g., `"FC"`).
+#' @param ADM Logical; apply additional data manipulations.
+#'
+#' @return A list of ggplot objects, combined statistics, and per-task
+#'   predictions for each algorithm stage.
+#' @export
 FinalViz <- function(TrainTestSet.ls,
                      alg1_result,
                      alg2_result,
@@ -200,7 +222,6 @@ FinalViz <- function(TrainTestSet.ls,
               ChangeAcross = ChangeAcross))
 
 }
-
 
 
 
