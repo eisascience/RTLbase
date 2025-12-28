@@ -19,8 +19,11 @@ knitr::opts_chunk$set(
 
 ### Missing or conflicting packages
 
-- Ensure Imports are installed: `install.packages(c("caret", "data.table",
-  "e1071", "GSE", "ggplot2", "RColorBrewer", "DescTools", "gradDescent", "zoo"))`.
+- Ensure core dependencies are installed: `install.packages(c("caret", "data.table",
+  "e1071", "ggplot2", "RColorBrewer", "DescTools", "zoo"))`.
+- Optional packages for specialized features: `install.packages(c("GSE", "gradDescent"))`.
+  Note: These packages may not be available on CRAN. They are only required for
+  specific functions like `SpecializedGD2D()`.
 - When `zoo` is missing, `argmax()` will raise `could not find function "rollapply"`.
 
 ### Memory pressure during SVM training

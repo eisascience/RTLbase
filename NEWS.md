@@ -1,3 +1,12 @@
+# RTLbase 1.0.1
+
+## Bug fixes
+
+* Fixed dependency issues by moving `GSE` and `gradDescent` from Imports to Suggests, allowing package installation without optional dependencies.
+* Removed unused `GSE` import from NAMESPACE (package was only referenced in commented code).
+* Added runtime check for `gradDescent` package in `SpecializedGD2D()` function with informative error message.
+* Updated `rtl_benchmark()` to treat optional packages gracefully with warnings instead of errors.
+
 # RTLbase 1.0.0
 
 ## New features
