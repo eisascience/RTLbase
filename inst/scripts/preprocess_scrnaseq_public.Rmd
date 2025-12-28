@@ -1,0 +1,73 @@
+---
+title: "Preprocess public scRNA-seq data for RTLbase"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+## Overview
+
+This notebook outlines a minimal, reproducible pathway to turn a public scRNA-seq
+matrix into CSV files that RTLbase can ingest with `load_scrnaseq_counts()`. It
+avoids heavyweight dependencies and focuses on transparent filtering steps.
+
+## 1. Configure sources
+
+```{r}
+library(utils)
+library(RTLbase)
+
+counts_url <- "https://example.org/public-scrna-counts.mtx.gz"
+cell_metadata_url <- "https://example.org/public-scrna-cells.tsv"
+feature_metadata_url <- "https://example.org/public-scrna-genes.tsv"
+out_dir <- tempdir()
+```
+
+## 2. Download and read matrices
+
+Replace the download calls if you already have local files.
+
+```{r}
+counts_path <- file.path(out_dir, "counts.mtx.gz")
+cell_meta_path <- file.path(out_dir, "cells.tsv")
+feature_meta_path <- file.path(out_dir, "genes.tsv")
+
+try(download.file(counts_url, counts_path, quiet = TRUE), silent = TRUE)
+try(download.file(cell_metadata_url, cell_meta_path, quiet = TRUE), silent = TRUE)
+try(download.file(feature_metadata_url, feature_meta_path, quiet = TRUE), silent = TRUE)
+
+counts_df <- as.data.frame(data.table::fread(counts_path))
+cell_meta <- as.data.frame(data.table::fread(cell_meta_path))
+feature_meta <- as.data.frame(data.table::fread(feature_meta_path))
+```
+
+Ensure that `counts_df` has a `gene_id` column and remaining columns correspond
+to cells. If cell IDs differ between files, align them before proceeding.
+
+## 3. Light QC and normalization
+
+```{r}
+# Drop cells with too few detected genes and genes with low detection
+scrna_ready <- load_scrnaseq_counts(
+  counts = counts_df,
+  cell_metadata = cell_meta,
+  feature_metadata = feature_meta,
+  normalization = "log1p",
+  min_cells = 5,
+  min_features = 200,
+  class_column = "label"
+)
+```
+
+## 4. Write package-ready CSVs
+
+```{r}
+write.csv(scrna_ready$counts, file.path(out_dir, "scRNAseq_updatedExample_counts.csv"), row.names = FALSE)
+write.csv(scrna_ready$cell_metadata, file.path(out_dir, "scRNAseq_updatedExample_cell_metadata.csv"), row.names = FALSE)
+write.csv(scrna_ready$feature_metadata, file.path(out_dir, "scRNAseq_updatedExample_feature_metadata.csv"), row.names = FALSE)
+```
+
+The resulting trio can be copied into `inst/extdata` or bundled with the package
+for use in vignettes and tests.
