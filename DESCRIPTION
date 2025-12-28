@@ -16,13 +16,13 @@ Imports:
     data.table,
     DescTools,
     e1071,
-    GSE,
     ggplot2,
-    gradDescent,
     parallel,
     RColorBrewer,
     zoo
 Suggests:
+    GSE,
+    gradDescent,
     lintr,
     styler,
     testthat (>= 3.0.0)

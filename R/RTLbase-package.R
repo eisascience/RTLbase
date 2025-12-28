@@ -11,7 +11,6 @@
 #' @import e1071
 #' @import caret
 #' @import data.table
-#' @import GSE
 #' @import ggplot2
 #' @import RColorBrewer
 #' @import zoo

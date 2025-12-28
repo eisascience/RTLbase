@@ -25,10 +25,18 @@ rtl_benchmark <- function(sizes = c(small = 250, medium = 1500, large = 3200),
 
   seed <- normalize_seed(seed)
 
-  required_pkgs <- c("e1071", "caret", "GSE", "gradDescent")
+  required_pkgs <- c("e1071", "caret")
   missing_pkgs <- required_pkgs[!vapply(required_pkgs, requireNamespace, logical(1), quietly = TRUE)]
   if (length(missing_pkgs)) {
     stop(paste("Install missing packages before benchmarking:", paste(missing_pkgs, collapse = ", ")))
+  }
+  
+  # Check optional packages that may be needed for specific algorithms
+  optional_pkgs <- c("GSE", "gradDescent")
+  missing_optional <- optional_pkgs[!vapply(optional_pkgs, requireNamespace, logical(1), quietly = TRUE)]
+  if (length(missing_optional)) {
+    warning(paste("Optional packages not available (some features may be limited):", 
+                  paste(missing_optional, collapse = ", ")))
   }
 
   if(length(features) == 1) features <- rep(features, length(sizes))
