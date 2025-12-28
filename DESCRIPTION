@@ -19,6 +19,7 @@ Imports:
     GSE,
     ggplot2,
     gradDescent,
+    parallel,
     RColorBrewer,
     zoo
 Suggests:

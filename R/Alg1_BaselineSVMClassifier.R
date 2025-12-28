@@ -24,6 +24,10 @@
 #' @param sampleRed Optional integer sample size for down-sampling during training.
 #' @param doParalellSVM Logical; use a parallelized SVM fit when `TRUE`.
 #' @param datatyp Character flag indicating data type (e.g., `"FC"` for flow cytometry).
+#' @param use_parallel Logical; parallelize per-dataset training when `TRUE`.
+#' @param parallel_cores Optional integer overriding the detected core count.
+#' @param wide_data_threshold Integer; when the number of columns exceeds this
+#'   threshold, inputs are coerced via `data.table` to minimize copies.
 #'
 #' @return A list containing the baseline hyperplanes, per-dataset results, and
 #'   metadata (number of datasets and dimensions).
@@ -37,7 +41,9 @@ alg1_baselineClass <- function(TrainXls,
                                svmCost,
                                prnt2scr,
                                X_cols2Keep,
-                               transX=F, sampleRed=F, doParalellSVM=F, datatyp="FC"){
+                               transX=F, sampleRed=F, doParalellSVM=F, datatyp="FC",
+                               use_parallel = FALSE, parallel_cores = NULL,
+                               wide_data_threshold = 200){
 
 
   #initializations
@@ -80,15 +86,11 @@ alg1_baselineClass <- function(TrainXls,
                            svmCost, ", gamma: ", svmGamma,
                            ", Kernel: linear" , ", cross: ", K_forCrossV, sep=""))
 
-  for (m in 1:M) {
-    #m=1
-
+  train_indices <- seq_len(M)
+  dataset_results <- map_with_backend(train_indices, use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(m){
     if(prnt2scr) print(m)
 
-    if(is.na(X_cols2Keep[1])) Dm.train  <- as.data.frame(TrainXls[[m]])
-    if(!is.na(X_cols2Keep[1])) Dm.train  <- as.data.frame(TrainXls[[m]])
-
-
+    Dm.train  <- coerce_feature_frame(TrainXls[[m]], X_cols2Keep, wide_data_threshold = wide_data_threshold)
 
     if(transX){
       Dm.train <- as.data.frame(RTL::AllDataManipulations(Dm.train,
@@ -98,27 +100,26 @@ alg1_baselineClass <- function(TrainXls,
                                                           globalASINhTrans = ifelse(datatyp=="FC", T, F),
                                                           globalRange1010Scale = F,
                                                           globalScaleByVal = F))[,X_cols2Keep]
-    } else{
-      if(!is.na(X_cols2Keep[1])) {
-        Dm.train <- Dm.train[,X_cols2Keep]
-      } else {
-        Dm.train <- as.data.frame(Dm.train)
-      }
+      Dm.train <- coerce_feature_frame(Dm.train, X_cols2Keep, wide_data_threshold = wide_data_threshold)
     }
-
 
     if(!is.factor(TrainYls[[m]])) {
       TrainYls[[m]] <- factor(TrainYls[[m]])
     }
 
-    if("TRUE" %in% levels(TrainYls[[m]])) TrainYls[[m]] <- factor(ifelse(TrainYls[[m]]==T,1,-1))
+    label_levels <- levels(TrainYls[[m]])
+    if("TRUE" %in% label_levels) {
+      TrainYls[[m]] <- factor(ifelse(TrainYls[[m]]==T,1,-1))
+      label_levels <- levels(TrainYls[[m]])
+    }
 
-    if("Pos" %in% levels(TrainYls[[m]])) POS = c("Neg", "Pos")
-    if("Neg" %in% levels(TrainYls[[m]])) POS = c("Neg", "Pos")
-
-    if("-1" %in% levels(TrainYls[[m]]))  POS = c(-1, 1)
-    if("1" %in% levels(TrainYls[[m]]))  POS = c(-1, 1)
-
+    if(any(label_levels %in% c("Pos", "Neg"))) {
+      POS <- c("Neg", "Pos")
+    } else if(any(label_levels %in% c("1", "-1", 1, -1))) {
+      POS <- c(-1, 1)
+    } else {
+      POS <- label_levels
+    }
 
     if(ncol(Dm.train)==1){
       Dm.train <- as.data.frame(cbind(Dm.train, factor(TrainYls[[m]], levels = POS)))
@@ -126,9 +127,6 @@ alg1_baselineClass <- function(TrainXls,
     } else {
       Dm.train$labelSVM        <- factor(TrainYls[[m]], levels = POS)
     }
-
-
-
 
     if(nDims == 1) colnames(Dm.train) <- c(paste(rep("X", nDims), 1:nDims, sep=""), "labelSVM")
 
@@ -138,13 +136,8 @@ alg1_baselineClass <- function(TrainXls,
       }
     }
 
-    #print(nrow(Dm.train))
-
-
     if(doParalellSVM==T){
       Dm.train <<- Dm.train
-      #print("intiating paralell SVM")
-      #for now running in to memory issues. for future dev
       Dm.train_model <- parallelSVM(labelSVM ~. , data=Dm.train,
                                     cost = svmCost , gamma = svmGamma,
                                     type="C-classification",
@@ -152,7 +145,6 @@ alg1_baselineClass <- function(TrainXls,
                                     cross = K_forCrossV,
                                     scale = F, numberCores = 4)
     } else {
-      #print("intiating non-paralell SVM")
 
       Dm.train_model <- svm(labelSVM ~. , data=Dm.train,
                             cost=svmCost, gamma=svmGamma,
@@ -163,40 +155,30 @@ alg1_baselineClass <- function(TrainXls,
     }
 
 
-    #print("predicting on train set")
-
     Dm.train.pred  <- predict(Dm.train_model, Dm.train)
 
     if("Pos" %in% levels(Dm.train.pred)) POS = "Pos"
     if("1" %in% levels(Dm.train.pred)) POS = "1"
 
 
-    results.all[[m]] <- list(train=conf.mat.stats(conf.mat.pred=Dm.train.pred, conf.mat.truth=Dm.train$labelSVM, POS),
-                             DmTrainPred = Dm.train.pred, train_model=Dm.train_model)
-
+    train_stats <- list(train=conf.mat.stats(conf.mat.pred=Dm.train.pred, conf.mat.truth=Dm.train$labelSVM, POS),
+                        DmTrainPred = Dm.train.pred, train_model=Dm.train_model)
 
 
     if(doParalellSVM){
-      #Wm is the hyperplane coeffs
       Wm <- drop(t(Dm.train_model[[1]]$coefs) %*% Dm.train_model[[1]]$SV)
-      #rho is the negative intercept
       bm <- drop(Dm.train_model[[1]]$rho)
     } else {
-      #Wm is the hyperplane coeffs
       Wm <- drop(t(Dm.train_model$coefs) %*% Dm.train_model$SV)
-      #rho is the negative intercept
       bm <- drop(Dm.train_model$rho)
 
     }
 
-    baselineSVM[m,] <- as.vector(cbind(t(Wm), bm))
+    list(hyperplane = as.vector(cbind(t(Wm), bm)), stats = train_stats)
+  })
 
-    remove(Dm.train)
-
-  }
-
-
-
+  baselineSVM <- do.call(rbind, lapply(dataset_results, function(res) res$hyperplane))
+  results.all <- lapply(dataset_results, function(res) res$stats)
   colnames(baselineSVM) <- c(paste(rep("Wm", nDims), 1:nDims, sep=""), "b.int")
 
 
@@ -209,8 +191,6 @@ alg1_baselineClass <- function(TrainXls,
               nDims = nDims))
 
 }
-
-
 
 
 

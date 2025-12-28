@@ -17,7 +17,10 @@ alg4_BiasUpdate(
   datatyp = "FC",
   RCSmodeBL = FALSE,
   RCSfreqSet = c(0, 0),
-  CoreClassifier = "LinSVM"
+  CoreClassifier = "LinSVM",
+  use_parallel = FALSE,
+  parallel_cores = NULL,
+  wide_data_threshold = 200
 )
 }
 \arguments{
@@ -50,6 +53,12 @@ alg4_BiasUpdate(
 \item{RCSfreqSet}{Numeric vector specifying frequency thresholds for RCS mode.}
 
 \item{CoreClassifier}{Core classifier identifier (e.g., \code{"LinSVM"}).}
+
+\item{use_parallel}{Logical; parallelize per-task updates when \code{TRUE}.}
+
+\item{parallel_cores}{Optional integer overriding detected core count.}
+
+\item{wide_data_threshold}{Integer; coerce wide feature sets via \code{data.table} to reduce copies.}
 }
 \value{
 A list with updated predictions, density summaries, and adjusted intercepts for

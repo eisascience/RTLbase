@@ -60,6 +60,53 @@ is.even <- function(x){
   x%%2 == 0
 }
 
+#' Apply a sequential or parallel map with consistent ordering
+#'
+#' @param indices Index vector to iterate over.
+#' @param FUN Function to apply.
+#' @param use_parallel Logical; when `TRUE` attempt to use `parallel::mclapply`.
+#' @param parallel_cores Optional integer to override the detected core count.
+#'
+#' @return A list matching the length and order of `indices`.
+map_with_backend <- function(indices, FUN, use_parallel = FALSE, parallel_cores = NULL){
+  if (!length(indices)) {
+    return(list())
+  }
+  if (!use_parallel || length(indices) == 1) {
+    return(lapply(indices, FUN))
+  }
+
+  cores <- if (is.null(parallel_cores)) {
+    max(1L, parallel::detectCores() - 1L)
+  } else {
+    max(1L, parallel_cores)
+  }
+
+  if (.Platform$OS.type == "windows") {
+    warning("Parallel backend is not available on Windows; falling back to sequential execution.", call. = FALSE)
+    return(lapply(indices, FUN))
+  }
+
+  parallel::mclapply(indices, FUN, mc.cores = cores, mc.preschedule = TRUE)
+}
+
+#' Coerce feature inputs while minimizing copies for wide data
+#'
+#' @param x Input data frame or matrix.
+#' @param cols Optional column indices to keep.
+#' @param wide_data_threshold Number of columns above which `data.table` is used.
+#'
+#' @return A data.frame or data.table with selected columns.
+coerce_feature_frame <- function(x, cols, wide_data_threshold = 200){
+  if(!is.na(cols[1]) && !(length(cols) == 1 && identical(cols, ""))){
+    x <- x[, cols, drop = FALSE]
+  }
+  if (ncol(x) >= wide_data_threshold) {
+    return(data.table::as.data.table(x))
+  }
+  as.data.frame(x)
+}
+
 #' Split a labelled data frame into cross-validated train/test lists
 #'
 #' @description

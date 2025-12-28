@@ -145,3 +145,14 @@ viz$comStats.sub
   alignment on challenging datasets.
 - Set `save2file = TRUE` when running long experiments so that intermediate
   plots and cross-validation summaries are persisted for later review.
+- New `use_parallel` and `parallel_cores` arguments on the classifier and
+  shift-compensation routines batch work across datasets using `parallel::mclapply`;
+  set `wide_data_threshold` to coerce wide feature matrices through
+  `data.table` to reduce copy overhead.
+- Run `rtl_benchmark()` to compare sequential versus parallel execution on
+  synthetic small/medium/large workloads:
+
+```r
+benchmark_results <- rtl_benchmark()
+print(benchmark_results)
+```
