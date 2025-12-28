@@ -13,7 +13,7 @@
 #'   runs.
 #' @param margin Margin value forwarded to [alg4_BiasUpdate()].
 #' @param seed Integer seed for reproducible synthetic data generation.
-#'
+#' 
 #' @return A `data.table` summarizing elapsed seconds per dataset and mode.
 #' @export
 rtl_benchmark <- function(sizes = c(small = 250, medium = 1500, large = 3200),
@@ -22,6 +22,8 @@ rtl_benchmark <- function(sizes = c(small = 250, medium = 1500, large = 3200),
                           parallel_cores = NULL,
                           margin = 0.5,
                           seed = 99){
+
+  seed <- normalize_seed(seed)
 
   required_pkgs <- c("e1071", "caret", "GSE", "gradDescent")
   missing_pkgs <- required_pkgs[!vapply(required_pkgs, requireNamespace, logical(1), quietly = TRUE)]
@@ -105,14 +107,14 @@ rtl_benchmark <- function(sizes = c(small = 250, medium = 1500, large = 3200),
     data.table::data.table(mode = mode_label, elapsed = as.numeric(elapsed))
   }
 
-  set.seed(seed)
-  results <- data.table::rbindlist(lapply(seq_along(sizes), function(idx){
+  run_benchmark <- function(){
+    results <- data.table::rbindlist(lapply(seq_along(sizes), function(idx){
     n <- sizes[[idx]]
     p <- features[[idx]]
     dataset_name <- names(sizes)[idx]
 
     data.table::rbindlist(lapply(seq_len(repetitions), function(rep_id){
-      set.seed(seed + idx + rep_id)
+      if (!is.null(seed)) set.seed(seed + idx + rep_id)
       seq_res <- run_pipeline(n, p, "sequential")
       seq_res[, `:=`(dataset = dataset_name, n = n, p = p, repetition = rep_id, cores = 1L)]
 
@@ -122,6 +124,15 @@ rtl_benchmark <- function(sizes = c(small = 250, medium = 1500, large = 3200),
       data.table::rbindlist(list(seq_res, par_res))
     }))
   }))
+  }
 
-  results[, .(dataset, n, p, repetition, mode, cores, elapsed)]
+  summarise_results <- function(dt) {
+    dt[, .(dataset, n, p, repetition, mode, cores, elapsed)]
+  }
+
+  if (!is.null(seed)) {
+    return(scoped_seed(seed, summarise_results(run_benchmark())))
+  }
+
+  summarise_results(run_benchmark())
 }
