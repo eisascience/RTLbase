@@ -1,6 +1,6 @@
 Package: RTLbase
 Title: R Transfer Learning Baseline Classification Framework
-Version: 1.0.0
+Version: 1.0.1
 Authors@R: c(
     person("Eisa", "Mahyari", role = c("aut", "cre"), email = "contact@rtlbase.example")
   )
@@ -16,13 +16,13 @@ Imports:
     data.table,
     DescTools,
     e1071,
-    GSE,
     ggplot2,
-    gradDescent,
     parallel,
     RColorBrewer,
     zoo
 Suggests:
+    GSE,
+    gradDescent,
     lintr,
     styler,
     testthat (>= 3.0.0)

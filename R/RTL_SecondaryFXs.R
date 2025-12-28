@@ -97,7 +97,12 @@ SpecializedGD2D <- function(xyDF,
                             learningRate      = 0.1,
                             maximumIters4GD   = 100,
                             print2screen = F, plot2screen = F){
-  #library(gradDescent)
+  
+  # Check if gradDescent is available
+  if (!requireNamespace("gradDescent", quietly = TRUE)) {
+    stop("Package 'gradDescent' is required for SpecializedGD2D but is not installed. ",
+         "Please install it from CRAN or an appropriate repository.")
+  }
 
   # print2screen = F, plot2screen = F
   # x1 <- unique(round(c(rnorm(1000, 1), rnorm(600, 6)),3))
