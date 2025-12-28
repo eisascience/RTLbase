@@ -27,7 +27,7 @@ build_target_tasks <- function() {
 
 test_that("alg2 robust mean/cov returns normalized statistics", {
   skip_if_missing_alg_deps()
-  alg2_res <- alg2_rob_meanNCov(build_baseline_matrix(), print2screen = FALSE)
+  alg2_res <- alg2_rob_meanNCov(build_baseline_matrix(), verbose = FALSE)
 
   expect_named(alg2_res$U_robust_norm, c("w1", "b.int"))
   expect_length(alg2_res$v_0, 1)
@@ -38,12 +38,13 @@ test_that("alg2 robust mean/cov returns normalized statistics", {
 test_that("bandwidth estimator surfaces recycling and missing data", {
   skip_if_missing_alg_deps()
   expect_warning(KBand_fx(1:3, c(1, 2)), "length")
+  expect_warning(KBand_fx(c(1, NA, 3), c(1, 1, 1)), "NA")
   expect_true(is.na(KBand_fx(c(1, NA, 3), c(1, 1, 1))))
 })
 
 test_that("shift compensation is deterministic with a fixed seed", {
   skip_if_missing_alg_deps()
-  alg2_res <- alg2_rob_meanNCov(build_baseline_matrix(), print2screen = FALSE)
+  alg2_res <- alg2_rob_meanNCov(build_baseline_matrix(), verbose = FALSE)
   source_list <- build_small_tasks()
   task_list <- build_target_tasks()
 
@@ -53,7 +54,7 @@ test_that("shift compensation is deterministic with a fixed seed", {
     task_list = task_list,
     alg1_result = list(),
     alg2_result = alg2_res,
-    print2screen = FALSE,
+    verbose = FALSE,
     save2file = FALSE,
     maximumLag = 2,
     ImpFeats = NA,
@@ -70,7 +71,7 @@ test_that("shift compensation is deterministic with a fixed seed", {
     task_list = task_list,
     alg1_result = list(),
     alg2_result = alg2_res,
-    print2screen = FALSE,
+    verbose = FALSE,
     save2file = FALSE,
     maximumLag = 2,
     ImpFeats = NA,
@@ -81,14 +82,15 @@ test_that("shift compensation is deterministic with a fixed seed", {
     CoreClassifier = "LinSVM"
   )
 
-  expect_equal(first_run, second_run)
-  expect_length(first_run, length(task_list))
-  expect_true(all(is.finite(first_run)))
+  expect_s3_class(first_run, "rtl_alg3_result")
+  expect_equal(first_run$intercepts, second_run$intercepts)
+  expect_length(first_run$intercepts, length(task_list))
+  expect_true(all(is.finite(first_run$intercepts)))
 })
 
 test_that("bias update aligns dimensions and reports NA inputs", {
   skip_if_missing_alg_deps()
-  alg2_res <- alg2_rob_meanNCov(build_baseline_matrix(), print2screen = FALSE)
+  alg2_res <- alg2_rob_meanNCov(build_baseline_matrix(), verbose = FALSE)
   source_list <- build_small_tasks()
   task_list <- build_target_tasks()
 
@@ -98,7 +100,7 @@ test_that("bias update aligns dimensions and reports NA inputs", {
     task_list = task_list,
     alg1_result = list(),
     alg2_result = alg2_res,
-    print2screen = FALSE,
+    verbose = FALSE,
     save2file = FALSE,
     maximumLag = 2,
     ImpFeats = NA,
@@ -156,7 +158,7 @@ test_that("bias update aligns dimensions and reports NA inputs", {
 
 test_that("normal vector update preserves dimensionality", {
   skip_if_missing_alg_deps()
-  alg2_res <- alg2_rob_meanNCov(build_baseline_matrix(), print2screen = FALSE)
+  alg2_res <- alg2_rob_meanNCov(build_baseline_matrix(), verbose = FALSE)
   source_list <- build_small_tasks()
   task_list <- build_target_tasks()
 
@@ -166,7 +168,7 @@ test_that("normal vector update preserves dimensionality", {
     task_list = task_list,
     alg1_result = list(),
     alg2_result = alg2_res,
-    print2screen = FALSE,
+    verbose = FALSE,
     save2file = FALSE,
     maximumLag = 2,
     ImpFeats = NA,

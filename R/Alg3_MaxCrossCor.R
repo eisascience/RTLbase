@@ -71,8 +71,10 @@ ccfmaxV3 <- function(a, b, e=0, maxLag, useAbsCor = T)
 #' @param task_list List of target task feature matrices to be aligned.
 #' @param alg1_result Output list from [alg1_baselineClass()].
 #' @param alg2_result Output list from [alg2_rob_meanNCov()].
-#' @param print2screen Logical; print progress updates.
+#' @param verbose Logical; print progress updates.
 #' @param save2file Logical; save diagnostic plots to disk.
+#' @param save_dir Optional directory where diagnostic plots are written when
+#'   `save2file` is `TRUE`. Defaults to a temporary directory.
 #' @param maximumLag Maximum lag to consider in cross-correlation.
 #' @param ImpFeats Optional vector of feature indices to retain.
 #' @param ADM Logical; apply additional data manipulations.
@@ -86,13 +88,15 @@ ccfmaxV3 <- function(a, b, e=0, maxLag, useAbsCor = T)
 #' @param wide_data_threshold Integer; when data are wide, coerce with
 #'   `data.table` to reduce copies before projection.
 #'
-#' @return A numeric vector of updated intercepts per task.
+#' @return A structured list containing updated intercepts per task and
+#'   cross-correlation diagnostics.
 #' @export
 alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
-                           print2screen, save2file, maximumLag, ImpFeats,
+                           save2file = FALSE, maximumLag = 0, ImpFeats = NA,
                            ADM=F, datatyp="FC", useAbsCor = T, medianMediansBL = F,
                            CoreClassifier, use_parallel = FALSE, parallel_cores = NULL,
-                           wide_data_threshold = 200){
+                           wide_data_threshold = 200, verbose = FALSE, save_dir = NULL,
+                           print2screen = NULL){
 
   # task_list      = TestXls.t;
   # source_list    =  TrainXls.t;
@@ -103,13 +107,29 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
   # maximumLag     =  0;
   # ImpFeats = ImpFeats
 
+  verbose <- isTRUE(verbose) || isTRUE(print2screen)
   n_testSets = length(task_list)
   M = length(source_list)
+  palette <- ColorTheme()
+  col_vector <- palette$col_vector
 
+  if (length(source_list) != length(alg1_result$baselineSVM) && !is.null(alg1_result$baselineSVM)) {
+    warning("Source list length does not match alg1_result; proceeding with provided data.", call. = FALSE)
+  }
 
+  if (n_testSets == 0 || M == 0) {
+    stop("source_list and task_list must contain at least one entry.", call. = FALSE)
+  }
 
+  if (save2file && is.null(save_dir)) {
+    save_dir <- file.path(tempdir(), "RTLbase_alg3")
+  }
+  if (save2file) {
+    dir.create(save_dir, recursive = TRUE, showWarnings = FALSE)
+  }
+  log_dir <- if (is.null(save_dir)) tempdir() else save_dir
 
-  if(print2screen) print("starting Alg 3, shift compensation")
+  if(verbose) message("starting Alg 3, shift compensation")
 
   #alg1task_hat <- vector(mode="list")
   #alg1source_hat <- vector(mode="list")
@@ -126,7 +146,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
 
 
   source_hat <- map_with_backend(seq_len(M), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(m){
-    if(print2screen) print(paste("Inference of class by the datasets's baseline hyperplane #", m,sep=""))
+    if(verbose) message(paste("Inference of class by the datasets's baseline hyperplane #", m,sep=""))
 
     SOURCE <- coerce_feature_frame(source_list[[m]], ImpFeats, wide_data_threshold = wide_data_threshold)
 
@@ -153,7 +173,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
   names(source_hat) <- names(source_list)
 
   task_hat <- map_with_backend(seq_len(n_testSets), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(j){
-    if(print2screen) print(paste("Mapping to Y_hat for Task: ", j, sep=""))
+    if(verbose) message(paste("Mapping to Y_hat for Task: ", j, sep=""))
 
     TASK <- coerce_feature_frame(task_list[[j]], ImpFeats, wide_data_threshold = wide_data_threshold)
 
@@ -180,10 +200,10 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
   })
   names(task_hat) <- names(task_list)
 
-  if(print2screen) print("step3 reached, task and source are mapped, starting Max-Cross Corr")
+  if(verbose) message("step3 reached, task and source are mapped, starting Max-Cross Corr")
 
   per_task_results <- map_with_backend(seq_len(n_testSets), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(t){
-    if(print2screen) print(paste("starting cross-cor for Task: ", t, sep=""))
+    if(verbose) message(paste("starting cross-cor for Task: ", t, sep=""))
     maxLagLocal <- maximumLag
     if (maxLagLocal == 0){
       if(length(source_hat[[1]][,1])<50){
@@ -202,7 +222,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
 
       DensA <- density(task_hat[[t]][,1], n=length(task_hat[[t]][,1]))
       bwsig = DensA$bw
-      if(print2screen) print(paste("with source: ", i, sep=""))
+      if(verbose) message(paste("with source: ", i, sep=""))
 
       CorThresh = 0.9
       rep4Roba = 3
@@ -226,7 +246,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
       RobustCrossCorLag <- round(mean(RobustCrossCorLag[!is.na(RobustCrossCorLag)]))
 
       while(is.na(RobustCrossCorLag)){
-        if(print2screen) print(paste("robust cross-cor failed w. threshold: ", CorThresh, sep=""))
+        if(verbose) message(paste("robust cross-cor failed w. threshold: ", CorThresh, sep=""))
         CorThresh <- CorThresh - 0.01
         rep4Robb = 10
         RobustCrossCorLagALL <- lapply(1:rep4Robb, function(id){
@@ -238,7 +258,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
           if(e_resamp$cor > CorThresh) return(e_resamp)
 
         });
-        if(print2screen) print(CorThresh)
+        if(verbose) message(CorThresh)
 
         RobustCrossCorLag.t <- as.numeric(as.character(lapply(RobustCrossCorLagALL, function(x){
           ifelse(is.null(x$lag), NA,x$lag)
@@ -247,7 +267,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
         RobustCrossCorLag <- Mode(RobustCrossCorLag.t[!is.na(RobustCrossCorLag.t)])
 
       }
-      if(print2screen) print(paste("robust cross-cor found @ threshold: ", CorThresh, sep=""))
+      if(verbose) message(paste("robust cross-cor found @ threshold: ", CorThresh, sep=""))
 
 
 
@@ -268,7 +288,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
 
       if (save2file) {
 
-        fileID = paste(BaseFigDIR, "/alg3Shifts_", paste("t_",t,"_s_",i,sep=""), ".png",sep="" )
+        fileID <- file.path(save_dir, paste0("alg3Shifts_", "t_", t, "_s_", i, ".png"))
 
         png(fileID, width = 1024, height = 768, units = "px")
 
@@ -343,7 +363,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
   if (save2file) {
 
 
-    fileID = paste(BaseFigDIR, "/alg3ShiftsCombo_", ".png",sep="" )
+    fileID <- file.path(save_dir, "alg3ShiftsCombo_.png")
 
     png(fileID, width = 1024, height = 768, units = "px")
     par(mfrow=c(1,3))
@@ -385,16 +405,16 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
     e_med_matDF$median <- apply(e_med_matDF, 1, median)
     print(xtable(t(cor_e_med_matDF), caption='Bias Shift Correlations in Test (rows) Vs. Training (columns) ',
                  label='tab:cor_shifts', digits=3),
-          file=paste(PermLogSaveDirV,
+          file=paste(log_dir,
                      "/cor_shifts.txt", sep=""))
     print(xtable(t(e_med_matDF), caption='Bias Shift Values in Test (rows) Vs. Training (columns) ',
                  label='tab:cor_shifts', digits=3),
-          file=paste(PermLogSaveDirV,
+          file=paste(log_dir,
                      "/val_shifts.txt", sep=""))
 
     print(xtable(t(MS_med_matDF), caption='Bias Shift Values in Test (rows) Vs. Training (columns) ',
                  label='tab:medMed_shifts', digits=3),
-          file=paste(PermLogSaveDirV,
+          file=paste(log_dir,
                      "/val_Medshifts.txt", sep=""))
 
 
@@ -413,16 +433,29 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
   }
 
 
-  if(print2screen) print("Shift Compesation complete for all tasks")
-  if(print2screen) print("the normed intercepts (b_t) have been updated by median lag in max cross-correlation")
+  if(verbose) message("Shift Compesation complete for all tasks")
+  if(verbose) message("the normed intercepts (b_t) have been updated by median lag in max cross-correlation")
 
-  if(print2screen) print("the shifts for each task:")
-  if(print2screen) print(as.numeric(lapply(e_med_mat, median)))
-  if(print2screen) print("Final intercepts for all tasks:")
-  if(print2screen) print(b_updated)
-  return(b_updated)
+  if(verbose) message("the shifts for each task:")
+  if(verbose) message(as.numeric(lapply(e_med_mat, median)))
+  if(verbose) message("Final intercepts for all tasks:")
+  if(verbose) message(b_updated)
+
+  result <- list(
+    intercepts = b_updated,
+    lag_matrix = as.data.frame(e_med_mat),
+    correlation_matrix = as.data.frame(cor_e_med_mat),
+    median_shifts = medianShifts,
+    median_of_medians = medianMedianShifts,
+    median_shift_matrix = as.data.frame(MS_med_mat),
+    metadata = list(
+      core_classifier = CoreClassifier,
+      use_abs_cor = useAbsCor,
+      median_of_medians = medianMediansBL,
+      maximum_lag = maximumLag
+    )
+  )
+  class(result) <- "rtl_alg3_result"
+  return(result)
 
 }
-
-
-

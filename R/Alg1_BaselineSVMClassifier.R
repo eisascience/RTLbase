@@ -18,7 +18,7 @@
 #' @param K_forCrossV Number of folds for internal SVM cross-validation.
 #' @param svmGamma Radial basis gamma parameter passed to `e1071::svm`.
 #' @param svmCost Cost parameter passed to `e1071::svm`.
-#' @param prnt2scr Logical; print progress to the console.
+#' @param verbose Logical; print progress to the console.
 #' @param X_cols2Keep Column indices to retain from the feature matrices.
 #' @param transX Logical; apply additional transformations via `RTL::AllDataManipulations`.
 #' @param sampleRed Optional integer sample size for down-sampling during training.
@@ -39,24 +39,29 @@ alg1_baselineClass <- function(TrainXls,
                                K_forCrossV,
                                svmGamma,
                                svmCost,
-                               prnt2scr,
                                X_cols2Keep,
                                transX=F, sampleRed=F, doParalellSVM=F, datatyp="FC",
                                use_parallel = FALSE, parallel_cores = NULL,
-                               wide_data_threshold = 200){
+                               wide_data_threshold = 200,
+                               verbose = FALSE,
+                               prnt2scr = NULL){
 
 
   #initializations
   errorFlag = F
+  verbose <- isTRUE(verbose) || isTRUE(prnt2scr)
 
 
   #Source task data Dm for m = 1, ...., M datasets
 
-  M = length(TrainXls); if(prnt2scr) print(paste("# of datasets = ", M, sep=""))
+  if (is.null(TrainXls) || is.null(TrainYls)) {
+    stop("Training feature and label lists must be provided.", call. = FALSE)
+  }
+
+  M = length(TrainXls); if(verbose) message(paste("# of datasets = ", M, sep=""))
 
   if (length(TrainYls) != M) {
-    errorFlag = T
-    print("training X and Y lengths dont match")
+    stop("Training feature and label list lengths must match.", call. = FALSE)
   }
 
 
@@ -64,11 +69,11 @@ alg1_baselineClass <- function(TrainXls,
   #Assuming that all df will have the same # of cols;
   if(class(TrainXls[[1]]) == "numeric"){
     nDims = 1
-    if(prnt2scr) print("datasets have 1 dim/feat each")
+    if(verbose) message("datasets have 1 dim/feat each")
 
   } else {
     nDims = ncol(as.data.frame((TrainXls[[1]]))[,X_cols2Keep])
-    if(prnt2scr) paste("datasets have ", nDims, " dims/feats each", sep="")
+    if(verbose) message(paste("datasets have ", nDims, " dims/feats each", sep=""))
   }
 
 
@@ -82,13 +87,13 @@ alg1_baselineClass <- function(TrainXls,
   #-------------------end of inputs and initializations
 
 
-  if(prnt2scr) print(paste("Starting training with a SVM classifier || cost: ",
-                           svmCost, ", gamma: ", svmGamma,
-                           ", Kernel: linear" , ", cross: ", K_forCrossV, sep=""))
+  if(verbose) message(paste("Starting training with a SVM classifier || cost: ",
+                            svmCost, ", gamma: ", svmGamma,
+                            ", Kernel: linear" , ", cross: ", K_forCrossV, sep=""))
 
   train_indices <- seq_len(M)
   dataset_results <- map_with_backend(train_indices, use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(m){
-    if(prnt2scr) print(m)
+    if(verbose) message(m)
 
     Dm.train  <- coerce_feature_frame(TrainXls[[m]], X_cols2Keep, wide_data_threshold = wide_data_threshold)
 
@@ -185,14 +190,13 @@ alg1_baselineClass <- function(TrainXls,
   rownames(baselineSVM) <- names(TrainXls)
   names(results.all) <- names(TrainXls)
 
-  return(list(baselineSVM = baselineSVM,
-              results.all = results.all,
-              M = M,
-              nDims = nDims))
+  structure(list(baselineSVM = baselineSVM,
+                 results.all = results.all,
+                 M = M,
+                 nDims = nDims),
+            class = "rtl_alg1_result")
 
 }
-
-
 
 
 

@@ -17,9 +17,23 @@ KBand_fx <- function(s_k, c_k){
   #kernel density estimation suggested in Silverman (1986)
 
   #s_k <- s_j; c_k <- c_j
+  if (length(s_k) != length(c_k)) {
+    warning("s_k and c_k must have the same length.", call. = FALSE)
+    return(NA_real_)
+  }
+  if (anyNA(s_k) || anyNA(c_k)) {
+    warning("s_k and c_k must not contain NA values.", call. = FALSE)
+    return(NA_real_)
+  }
+  if (!length(s_k)) {
+    warning("Empty inputs supplied to KBand_fx.", call. = FALSE)
+    return(NA_real_)
+  }
   N <- sum(c_k)
   s_avg <- sum(s_k*c_k)/N
   sigma_hat <- (sum(c_k*(s_k - s_avg)^2)/(N-1))^0.5
   h <- 0.9*sigma_hat*N^(-0.2)
-  return(h)
+  bandwidth <- structure(h, class = c("rtl_bandwidth", class(h)),
+                         metadata = list(mean = s_avg, sigma = sigma_hat, effective_n = N))
+  return(bandwidth)
 }
