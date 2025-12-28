@@ -1,0 +1,9 @@
+marker,channel,measurement_type
+CD3,Ch1,protein
+CD4,Ch2,protein
+CD8,Ch3,protein
+CD14,Ch4,protein
+CD19,Ch5,protein
+CD45RA,Ch6,protein
+CD45RO,Ch7,protein
+HLADR,Ch8,protein

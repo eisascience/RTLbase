@@ -22,6 +22,30 @@ RTL transfer learning workflow. We demonstrate how to load the included B-cell
 example dataset, structure the inputs expected by the algorithms, and perform
 light preprocessing that preserves class balance.
 
+## Updated assay loaders
+
+Recent public releases include richer metadata and slightly different export
+conventions for both CyTOF and scRNA-seq. RTLbase now ships dedicated loaders
+that normalize these inputs and check metadata alignment.
+
+```{r}
+cytof <- load_cytof_assay(
+  exprs = system.file("data", "CyTOF_updatedExample_exprs.csv", package = "RTLbase"),
+  cell_metadata = read.csv(system.file("data", "CyTOF_updatedExample_metadata.csv", package = "RTLbase")),
+  class_column = "label"
+)
+
+scrna <- load_scrnaseq_counts(
+  counts = system.file("data", "scRNAseq_updatedExample_counts.csv", package = "RTLbase"),
+  cell_metadata = read.csv(system.file("data", "scRNAseq_updatedExample_cell_metadata.csv", package = "RTLbase")),
+  feature_metadata = read.csv(system.file("data", "scRNAseq_updatedExample_feature_metadata.csv", package = "RTLbase")),
+  normalization = "log1p"
+)
+
+str(cytof$cell_metadata)
+str(scrna$normalized_counts[, 1:6])
+```
+
 ## Load the package and data
 
 ```{r}
@@ -34,6 +58,15 @@ str(bcell)
 
 The `PBMC` matrix holds transformed cytometry intensities, and `PBMC.Class`
 contains binary labels (`Pos`/`Neg`).
+
+Additional examples live in `data/`:
+
+- `CyTOF_updatedExample_*`: CSV trio of marker intensities, cell metadata, and
+  feature metadata that mirrors current CyTOF exports.
+- `scRNAseq_updatedExample_*`: CSV trio of counts, cell metadata, and feature
+  metadata designed for updated scRNA-seq releases.
+
+Both integrate directly with the new loaders shown above.
 
 ## Create stratified train/test splits
 
@@ -69,3 +102,16 @@ ready for `alg1_baselineClass()`.
 - Confirm that each class appears in every fold: `table(splits$TrainXY.ls[[1]]$y)`.
 - Keep a copy of the original data to back out any preprocessing choices that
   reduce performance.
+
+## Reproducible preprocessing scripts
+
+To help convert public datasets into RTL-ready objects, the package includes
+walkthrough scripts that can be adapted to your cohorts:
+
+- CyTOF preprocessing: `system.file("scripts", "preprocess_cytof_public.R",
+  package = "RTLbase")`
+- scRNA-seq preprocessing: `system.file("scripts", "preprocess_scrnaseq_public.Rmd",
+  package = "RTLbase")`
+
+These scripts show how to download raw files, harmonize metadata, apply
+transformations, and save CSV outputs that the loaders above can read directly.
