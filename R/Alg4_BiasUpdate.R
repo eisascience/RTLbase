@@ -32,6 +32,32 @@
 ######
 ###
 
+#' Update classification bias on target tasks
+#'
+#' @description
+#' Implements Algorithm 4 to refine decision boundaries on target tasks by
+#' estimating density-informed bias adjustments. Supports optional data
+#' manipulations and RCS (rare-cell subset) focusing.
+#'
+#' @param task_list List of target task feature matrices.
+#' @param alg1_result Output list from [alg1_baselineClass()].
+#' @param alg2_result Output list from [alg2_rob_meanNCov()].
+#' @param alg3_result Vector of bias updates from [alg3_shiftComp()].
+#' @param goodColumns Optional column indices to retain.
+#' @param save2file Logical; persist diagnostic plots to disk.
+#' @param Marg Margin parameter controlling neighborhood width.
+#' @param alg4MinFx Mode selection for minima detection (`"gd"`, `"mean"`, `"win"`).
+#' @param ADM Logical; apply additional data manipulations.
+#' @param useMedian Logical; smooth minima search using medians.
+#' @param ZnormMappingBL Logical; use z-normalized mapping for bias updates.
+#' @param datatyp Character flag indicating data type (e.g., `"FC"`).
+#' @param RCSmodeBL Logical; enable rare-cell subset adjustments.
+#' @param RCSfreqSet Numeric vector specifying frequency thresholds for RCS mode.
+#' @param CoreClassifier Core classifier identifier (e.g., `"LinSVM"`).
+#'
+#' @return A list with updated predictions, density summaries, and adjusted
+#'   intercepts for each target task.
+#' @export
 alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
                             alg3_result, goodColumns,
                             save2file, Marg, alg4MinFx, ADM=F,
@@ -492,7 +518,6 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
 
 }
-
 
 
 

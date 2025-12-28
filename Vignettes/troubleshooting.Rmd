@@ -1,0 +1,54 @@
+---
+title: "Troubleshooting RTLbase runs"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Troubleshooting RTLbase runs}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Common issues and fixes
+
+### Missing or conflicting packages
+
+- Ensure Imports are installed: `install.packages(c("caret", "data.table",
+  "e1071", "GSE", "ggplot2", "RColorBrewer", "DescTools", "gradDescent", "zoo"))`.
+- When `zoo` is missing, `argmax()` will raise `could not find function "rollapply"`.
+
+### Memory pressure during SVM training
+
+- Start with `doParalellSVM = FALSE` to avoid duplicating large matrices across
+  workers.
+- Down-sample with the `sampleRed` argument to `alg1_baselineClass()` while
+  prototyping.
+- Remove unneeded columns with `X_cols2Keep` before calling Algorithm 1.
+
+### Convergence problems in Algorithms 3–6
+
+- Reduce `maximumLag` in `alg3_shiftComp()` when density estimates are noisy.
+- For rare populations, enable RCS mode in `alg4_BiasUpdate()` or
+  `alg6_NormalVectorUpdate()` and provide a reasonable `RCSfreqSet`
+  (e.g., `c(0.05, 0.1)`).
+- If minima detection fails, switch `alg4MinFx` to `"mean"` or `"win"` to
+  simplify the search.
+
+### Visualization gaps
+
+- Set `save2file = TRUE` to write intermediate PNGs from Algorithms 3–6; the
+  paths are derived from `BaseFigDIR`.
+- When plots look empty, verify the sign of labels (`Pos/Neg` vs `1/-1`) so that
+  confusion matrices use the intended positive class.
+
+### Reproducibility tips
+
+- Set seeds around resampling steps: `set.seed(123); alg1 <- alg1_baselineClass(...)`.
+- Keep a log of parameter settings alongside persisted hyperplanes to simplify
+  future reruns and comparisons.

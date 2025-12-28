@@ -35,6 +35,17 @@ orthnormal <- function(X)
 }
 
 
+#' Approximate minima by scanning mirrored windows
+#'
+#' @description
+#' Uses paired sliding windows over an `x/y` density grid to approximate local
+#' minima, returning the most representative minimum across windows.
+#'
+#' @param xyDF Data frame with `x` and `y` columns representing a density curve.
+#' @param NWindows Integer number of window pairs to evaluate (must be even).
+#'
+#' @return Numeric position of the selected minimum.
+#' @export
 ClosingWindowAproxFunOptimizedMinima <- function(xyDF, NWindows = 50){
   #xyDF <- SmoothedXY.t[,c("x","y")]
 
@@ -62,6 +73,24 @@ ClosingWindowAproxFunOptimizedMinima <- function(xyDF, NWindows = 50){
   mean(as.numeric(Minimas[which(round(as.numeric(unlist(Minimas))) == Mode(round(as.numeric(unlist(Minimas)))))]))
 }
 
+#' Gradient-descent helper for identifying minima in 2D curves
+#'
+#' @description
+#' Fits a linear model via stochastic average gradient descent over a subset of
+#' the supplied density grid and returns the point of minimal deviation between
+#' the model and observed curve.
+#'
+#' @param xyDF Data frame with `x` and `y` columns.
+#' @param quants Optional quantile bounds used to trim the search region.
+#' @param MinMaxRange Optional numeric range restricting `x` values.
+#' @param learningRate Learning rate passed to `gradDescent::SAGD`.
+#' @param maximumIters4GD Maximum number of iterations for gradient descent.
+#' @param print2screen Logical; print optimization progress.
+#' @param plot2screen Logical; produce diagnostic plots.
+#'
+#' @return A list with the optimized minimum, fitted coefficients, and
+#'   preprocessing parameters.
+#' @export
 SpecializedGD2D <- function(xyDF,
                             quants            = c(0.1, 0.9),
                             MinMaxRange       = F,
@@ -177,6 +206,13 @@ SpecializedGD2D <- function(xyDF,
 
 }
 
+#' Locate local maxima in a numeric series
+#'
+#' @param x Numeric vector to search.
+#' @param m Neighborhood size for evaluating peak prominence.
+#'
+#' @return Integer indices of detected peaks.
+#' @export
 find_peaks <- function (x, m = 4){
   #https://github.com/stas-g/findPeaks
   shape <- diff(sign(diff(x, na.pad = FALSE)))
@@ -191,6 +227,24 @@ find_peaks <- function (x, m = 4){
   pks
 }
 
+#' Identify minima for bias correction curves
+#'
+#' @description
+#' Combines gradient-descent searches, windowed minima, and peak/dip detection
+#' to select a representative minimum from smoothed density estimates. The
+#' method supports several selection modes to tailor behaviour to data type.
+#'
+#' @param SmoothedXY Data frame of smoothed `x/y` coordinates.
+#' @param print2screen Logical; print progress updates.
+#' @param datatyp Character flag indicating data type (e.g., `"FC"`).
+#' @param learnRate Learning rate passed to gradient-descent helper routines.
+#' @param mode Character specifying the minima selection strategy (e.g., `"NZ"`,
+#'   `"MedianAll"`).
+#' @param cleanQuantsX Logical; trim extreme `x` quantiles before searching.
+#' @param cleanQuantsY Logical; trim low `y` density values before searching.
+#'
+#' @return A list containing selected peaks and minima positions.
+#' @export
 SmartMinimaAk <- function(SmoothedXY, print2screen=F, datatyp="FC", learnRate=0.1, mode="NZ", cleanQuantsX=T, cleanQuantsY=F){
 
   # cleanQuantsX = T; cleanQuantsY = F; print2screen = T; learnRate = 0.0000001; mode="MedianAll"
@@ -558,6 +612,15 @@ SmartMinimaAk <- function(SmoothedXY, print2screen=F, datatyp="FC", learnRate=0.
 
 
 
+#' Find inflection points in a numeric sequence
+#'
+#' @param InputNumVec Numeric vector to evaluate.
+#' @param n Integer specifying the sensitivity threshold.
+#' @param plot2screen Logical; plot detected minima/maxima.
+#'
+#' @return A list with `bottom` and `top` indices corresponding to minima and
+#'   maxima.
+#' @export
 CriticalPointsX<- function(InputNumVec, n = 3, plot2screen=T){
 
 
@@ -588,6 +651,13 @@ CriticalPointsX<- function(InputNumVec, n = 3, plot2screen=T){
 
 }
 
+#' Compute minima and maxima indices using inflection thresholds
+#'
+#' @param x Numeric vector to analyze.
+#' @param threshold Integer window size for detecting changes in slope.
+#'
+#' @return A list with `minima` and `maxima` index vectors.
+#' @export
 inflect <- function(x, threshold = 1){
   up   <- sapply(1:threshold, function(n) c(x[-(seq(n))], rep(NA, n)))
   down <-  sapply(-1:-threshold, function(n) c(rep(NA,abs(n)), x[-seq(length(x), length(x) - abs(n) + 1)]))
@@ -596,6 +666,16 @@ inflect <- function(x, threshold = 1){
 }
 
 
+#' Locate local maxima after LOESS smoothing
+#'
+#' @param x Numeric vector of x-values.
+#' @param y Numeric vector of y-values.
+#' @param w Window size supplied to `zoo::rollapply`.
+#' @param ... Additional arguments passed to `stats::loess`.
+#'
+#' @return A list with the x-positions of maxima, their indices, and smoothed
+#'   fitted values.
+#' @export
 argmax <- function(x, y, w=1, ...) {
   #xSmoothedXY.t$y #SmoothedXY.t$y
   require(zoo)
@@ -606,6 +686,3 @@ argmax <- function(x, y, w=1, ...) {
   i.max <- which(delta <= 0) + w
   list(x=x[i.max], i=i.max, y.hat=y.smooth)
 }
-
-
-
