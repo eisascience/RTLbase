@@ -87,6 +87,8 @@ ccfmaxV3 <- function(a, b, e=0, maxLag, useAbsCor = T)
 #' @param parallel_cores Optional integer overriding the detected core count.
 #' @param wide_data_threshold Integer; when data are wide, coerce with
 #'   `data.table` to reduce copies before projection.
+#' @param seed Optional integer seed for reproducible KDE resampling and lag
+#'   estimation.
 #'
 #' @return A structured list containing updated intercepts per task and
 #'   cross-correlation diagnostics.
@@ -96,7 +98,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
                            ADM=F, datatyp="FC", useAbsCor = T, medianMediansBL = F,
                            CoreClassifier, use_parallel = FALSE, parallel_cores = NULL,
                            wide_data_threshold = 200, verbose = FALSE, save_dir = NULL,
-                           print2screen = NULL){
+                           print2screen = NULL, seed = NULL){
 
   # task_list      = TestXls.t;
   # source_list    =  TrainXls.t;
@@ -108,6 +110,9 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
   # ImpFeats = ImpFeats
 
   verbose <- isTRUE(verbose) || isTRUE(print2screen)
+  seed <- normalize_seed(seed)
+  shift_runner <- function(){
+
   n_testSets = length(task_list)
   M = length(source_list)
   palette <- ColorTheme()
@@ -228,7 +233,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
       rep4Roba = 3
 
       RobustCrossCorLagALL <- lapply(1:rep4Roba, function(id){
-        set.seed(abs(round(rnorm(id)*30000))[id])
+        if (!is.null(seed)) set.seed(seed + t + i + id)
 
         DensB1 <- density(source_hat[[i]][,1][sample(1:length(source_hat[[i]][,1]), min(c(length(source_hat[[i]][,1]), length(task_hat[[t]][,1]))))], bw=bwsig, n=length(task_hat[[t]][,1]))
 
@@ -250,7 +255,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
         CorThresh <- CorThresh - 0.01
         rep4Robb = 10
         RobustCrossCorLagALL <- lapply(1:rep4Robb, function(id){
-          set.seed(abs(round(rnorm(1)*30000)))
+          if (!is.null(seed)) set.seed(seed + t + i + id + rep4Roba)
           DensB1 <- density(source_hat[[i]][,1][sample(1:length(source_hat[[i]][,1]), min(c(length(source_hat[[i]][,1]), length(task_hat[[t]][,1]))))], bw=bwsig, n=length(task_hat[[t]][,1]))
           e_resamp <- ccfmaxV3(DensA$y,
                                DensB1$y,
@@ -457,5 +462,13 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
   )
   class(result) <- "rtl_alg3_result"
   return(result)
+
+}
+
+  if (!is.null(seed)) {
+    return(scoped_seed(seed, shift_runner()))
+  }
+
+  shift_runner()
 
 }

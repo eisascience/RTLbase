@@ -60,6 +60,53 @@ is.even <- function(x){
   x%%2 == 0
 }
 
+#' Normalize and validate RNG seeds
+#'
+#' @param seed Optional numeric seed.
+#'
+#' @return A single integer seed or `NULL` when not supplied.
+#' @export
+normalize_seed <- function(seed){
+  if (is.null(seed)) return(NULL)
+
+  if (!is.numeric(seed) || length(seed) != 1 || !is.finite(seed)) {
+    stop("seed must be a single finite numeric value.", call. = FALSE)
+  }
+
+  as.integer(seed)
+}
+
+#' Evaluate an expression while restoring the incoming RNG state
+#'
+#' @param seed Optional numeric seed used for reproducibility.
+#' @param expr Expression to evaluate.
+#'
+#' @return The result of `expr`.
+#' @export
+scoped_seed <- function(seed, expr){
+  seed <- normalize_seed(seed)
+
+  if (is.null(seed)) {
+    return(force(expr))
+  }
+
+  seed_existed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  if (seed_existed) {
+    old_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  }
+
+  on.exit({
+    if (seed_existed) {
+      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rm(list = ".Random.seed", envir = .GlobalEnv)
+    }
+  }, add = FALSE)
+
+  set.seed(seed)
+  force(expr)
+}
+
 #' Apply a sequential or parallel map with consistent ordering
 #'
 #' @param indices Index vector to iterate over.
