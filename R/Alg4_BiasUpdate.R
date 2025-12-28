@@ -54,6 +54,10 @@
 #' @param RCSmodeBL Logical; enable rare-cell subset adjustments.
 #' @param RCSfreqSet Numeric vector specifying frequency thresholds for RCS mode.
 #' @param CoreClassifier Core classifier identifier (e.g., `"LinSVM"`).
+#' @param use_parallel Logical; parallelize per-task updates when `TRUE`.
+#' @param parallel_cores Optional integer overriding detected core count.
+#' @param wide_data_threshold Integer; coerce wide feature sets via `data.table`
+#'   to reduce copies during mapping.
 #'
 #' @return A list with updated predictions, density summaries, and adjusted
 #'   intercepts for each target task.
@@ -63,7 +67,8 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
                             save2file, Marg, alg4MinFx, ADM=F,
                             useMedian = T, ZnormMappingBL=F, datatyp="FC",
                             RCSmodeBL = F, RCSfreqSet = c(0,0),
-                            CoreClassifier = "LinSVM"){
+                            CoreClassifier = "LinSVM", use_parallel = FALSE,
+                            parallel_cores = NULL, wide_data_threshold = 200){
 
 
 
@@ -88,25 +93,19 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
   print(n_testSets)
 
 
-  task_hat_norm_upd <- vector(mode="list")
-  task_hat_Z <- vector(mode="list")
+  task_hat_outputs <- map_with_backend(seq_len(n_testSets), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(m){
 
-  for (m in 1:n_testSets) {
-    #if(!exists("m"))   m = 1
-
-    TASK <- as.data.frame(task_list[[m]])
+    TASK <- coerce_feature_frame(task_list[[m]], goodColumns, wide_data_threshold = wide_data_threshold)
     if(anyNA(TASK)) stop("Task data contains missing values; please clean inputs before bias update.")
 
-    #boxplot(TASK, las=2)
-    #violinMyDF(TASK)
-
-    if(ADM) TASK <- as.data.frame(AllDataManipulations(TASK,
-                                                       Scale=ScalePerCh,
-                                                       Center=MaxPerCh,
-                                                       X_cols2Keep = goodColumns,
-                                                       globalASINhTrans = ifelse(datatyp=="FC", T, F),
-                                                       globalRange1010Scale = F,
-                                                       globalScaleByVal = F))[,goodColumns]
+    if(ADM) TASK <- coerce_feature_frame(AllDataManipulations(TASK,
+                                                              Scale=ScalePerCh,
+                                                              Center=MaxPerCh,
+                                                              X_cols2Keep = goodColumns,
+                                                              globalASINhTrans = ifelse(datatyp=="FC", T, F),
+                                                              globalRange1010Scale = F,
+                                                              globalScaleByVal = F)[,goodColumns],
+                                        goodColumns, wide_data_threshold = wide_data_threshold)
 
     if(ncol(TASK)==1){
       TASK <- as.data.frame(cbind(TASK, rep(-1, length(TASK))))
@@ -119,27 +118,21 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
 
     if(CoreClassifier == "LinSVM"){
-      task_hat_norm_upd[[m]] <- as.matrix(TASK) %*% c(-alg2_result$U_robust[-length(alg2_result$U_robust)],
-                                                      alg3_result[m])
+      task_hat_norm_upd <- as.matrix(TASK) %*% c(-alg2_result$U_robust[-length(alg2_result$U_robust)],
+                                                 alg3_result[m])
     }
 
 
-    #plot(density(task_hat_norm_upd[[m]]))
-    #boxplot(task_hat_norm_upd[[m]])
-
-    tempYhat.orgi <- task_hat_norm_upd[[m]]
+    tempYhat.orgi <- task_hat_norm_upd
 
     if(RCSmodeBL) {
-      xyDF <- as.data.frame(cbind(density(task_hat_norm_upd[[m]], n = nrow(task_hat_norm_upd[[m]]))$x, density(task_hat_norm_upd[[m]], n = nrow(task_hat_norm_upd[[m]]))$y))
+      xyDF <- as.data.frame(cbind(density(task_hat_norm_upd, n = nrow(task_hat_norm_upd))$x, density(task_hat_norm_upd, n = nrow(task_hat_norm_upd))$y))
       colnames(xyDF) <- c("x", "y")
-      #xyDF$x <- order(task_hat_norm_upd[[m]])
-      rownames(xyDF) <- rownames(task_hat_norm_upd[[m]])[order(task_hat_norm_upd[[m]])]
-      #plot(xyDF)
+      rownames(xyDF) <- rownames(task_hat_norm_upd)[order(task_hat_norm_upd)]
       DescTools::AUC(x=xyDF$x, y=xyDF$y)
 
-      aprioriMedianFreq <- max(RCSfreqSet)# + mean(rnorm(10000,RCSfreqSet, 3))*2
+      aprioriMedianFreq <- max(RCSfreqSet)
 
-      #RCS correction, not to over chop to still have landmarks
       aprioriMedianFreq <- ifelse(aprioriMedianFreq < 0.05, 0.05, aprioriMedianFreq)
 
 
@@ -147,23 +140,11 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
       AUCthr <- as.numeric(lapply(thresholds, function(xcut){
         tempCutSubDF <- subset(xyDF, x > xcut)
-        subAUC <- DescTools::AUC(x=tempCutSubDF$x, y=tempCutSubDF$y)
-        #if(subAUC >= aprioriMedianFreq) plot(tempCutSubDF, type="l", lwd=2, col="gold", main=paste("cut @", xcut, "\n Sub AUC = ", subAUC, sep=""))
-        subAUC
+        DescTools::AUC(x=tempCutSubDF$x, y=tempCutSubDF$y)
       }))
 
-      # plot(thresholds, AUCthr, pch=20, col="skyblue")
-
-      #thresholds[max(which(AUCthr >= aprioriMedianFreq))]
-
-      #xyDF <- subset(xyDF, x>=thresholds[max(which(AUCthr >= aprioriMedianFreq))])
-      #plot(xyDF, typ="l", main="estimated range by Gauss est. N = 1000")
-
-      #if(class(task_hat_norm_upd[[m]])!="data.frame") task_hat_norm_upd[[m]] <- as.data.frame(task_hat_norm_upd[[m]])
-      #colnames(task_hat_norm_upd[[m]]) <- c("zhat")
-      #xyDF <- subset(as.data.frame(task_hat_norm_upd[[m]]), zhat >= thresholds[max(which(AUCthr >= aprioriMedianFreq))])
       xyDF.sub <- subset(xyDF, x >= thresholds[max(which(AUCthr >= aprioriMedianFreq))] )
-      xyDF.sub$x.true <- task_hat_norm_upd[[m]][rownames(xyDF.sub),]
+      xyDF.sub$x.true <- task_hat_norm_upd[rownames(xyDF.sub),]
 
       if(length(xyDF.sub$y) > 3){
         if (save2file){
@@ -183,133 +164,53 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
           dev.off()
         }
-        #boxplot(xyDF.sub$x.true)
-        task_hat_norm_upd[[m]] <- xyDF.sub$x.true
+        task_hat_norm_upd <- xyDF.sub$x.true
         remove(tempYhat.orgi)
 
       } else{
-        task_hat_norm_upd[[m]] <- tempYhat.orgi
+        task_hat_norm_upd <- tempYhat.orgi
         remove(tempYhat.orgi)}
 
 
 
-      #task_hat_norm_upd[[m]] <- subset(xyDF, x>thresholds[max(which(AUCthr >= aprioriMedianFreq))])$y
-
-    } #######END of RCSmode AUC-based Density FOcusing
+    }
 
 
+    z.norm <- (task_hat_norm_upd-mean(task_hat_norm_upd))/sd(task_hat_norm_upd) ## standardized data
+    list(task_hat_norm_upd = task_hat_norm_upd, task_hat_Z = z.norm)
+  })
 
+  task_hat_norm_upd <- lapply(task_hat_outputs, function(x) x$task_hat_norm_upd)
+  task_hat_Z <- lapply(task_hat_outputs, function(x) x$task_hat_Z)
 
-
-
-
-    #plot(density(task_hat_norm_upd[[m]] ))
-    #z norm for optional testing/future expansion
-    #mean(task_hat_norm_upd[[m]])
-    #sd(task_hat_norm_upd[[m]])
-    z.norm <- (task_hat_norm_upd[[m]]-mean(task_hat_norm_upd[[m]]))/sd(task_hat_norm_upd[[m]]) ## standardized data
-    task_hat_Z[[m]] <- z.norm
-    #plot(density(z.norm))
-    #wilcox.test(rnorm(10000), z.norm)
-
-  }##### END of mapping all test sets
-
-  remove (TASK, m)
-
-  h_bandwidth <- vector()
-  c_j <- vector()
-  b_updated_alg4 <- vector()
-
-  SVM_b_all <- vector(mode="list")
-
-  for (tn in 1:n_testSets) {
-    # if(!exists("tn"))   tn = 1
+  bias_outputs <- map_with_backend(seq_len(n_testSets), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(tn){
     print(paste("Starting Bias Update on test set #", tn, sep=""))
-    #with alg3 b
 
     if(!ZnormMappingBL) z_i <- task_hat_norm_upd[[tn]]
     if(ZnormMappingBL) z_i <- task_hat_Z[[tn]]
 
-
-
-    #testing approx for classifying RCS especially if(doapprox)
-    #worked for scRNASeq but problematic with FC, over smooths,
-    #in scRNASeq the low examples do need a boost
-    #if(datatyp == "scRNASeqLogNormCount") z_i  <- approx(z_i, n=5000)$y
-
-
-    #on the range of y_hat
     s_j <- sort(z_i) #s_i ...grid of biases
     names(s_j) <- 1:length(s_j)
 
-    if(save2file){
-      # plot(x=s_j, y=(z_i), pch=20, col=factor(sign(z_i))); abline(h=0); abline(v=0)
-    }
-
-
-
-
     w_t_euc_mag <- alg2_result$w_euc_mag #euclidean norm of base
 
-    #this needs to be redone for speedup
-
-    FigSet <- unique(c(round(1:9/10*length(s_j)),
-                       sample(round(6:9/10.1*length(s_j)), replace=F, 4),
-                       sample(round(6:9/10.2*length(s_j)), replace=F, 4)))
-    if(length(FigSet)>13) FigSet <- sort(c(1, sample(FigSet,13,replace=F), length(s_j)))
-
-
-
-
-    GridX = 1:length(s_j)
-
-    #needs speeding up
-    for (j in GridX){
-      if(!exists("j"))   j=5900
-
-      #abs(bla)/||w_t||
-
-      densNorm <- abs(z_i - s_j[j])/w_t_euc_mag
-
-
-      c_j[j] <- sum(as.numeric(lapply((densNorm < Marg), IndicatorFX)))
-
-
-    }
-    # if(save2file) dev.off()
+    distance_grid <- abs(outer(z_i, s_j, "-"))/w_t_euc_mag
+    c_j <- colSums(distance_grid < Marg)
 
     names(c_j) <- 1:length(c_j)
     print("counting within margin complete")
 
-    #testing phase figs
-    if(save2file){
-
-
-
-    }
-
-    # ShortLoop = 0
-    # while(ShortLoop<3){
-    #   ShortLoop = ShortLoop + 1
-
-
-
-    h_bandwidth[tn] <- round(KBand_fx(s_k=s_j, c_k=c_j), 9)
-    #h_bandwidth[tn] <- KBand_fx(s_k=s_j, c_k=c_j)
+    h_bandwidth_val <- round(KBand_fx(s_k=s_j, c_k=c_j), 9)
 
     OneD_OptiBW <- density(s_j, n=length(s_j))$bw
-    MeanBW = mean(c( h_bandwidth[tn], OneD_OptiBW))
+    MeanBW = mean(c( h_bandwidth_val, OneD_OptiBW))
 
 
-    #############Smooth the counts, with a defined minimum length
-
-    #list of x and y
-    Gaus_Ker_Smooth_sj_cj = ksmooth(s_j,c_j,kernel="normal", h_bandwidth[tn],
+    Gaus_Ker_Smooth_sj_cj = ksmooth(s_j,c_j,kernel="normal", h_bandwidth_val,
                                     n.points = max(c(1000L, length(s_j))))
 
 
 
-    ###alternate bw
     Gaus_Ker_Smooth_sj_cj.optbw = ksmooth(s_j,c_j,kernel="normal", OneD_OptiBW,
                                           n.points = max(c(1000L, length(s_j))))
     Gaus_Ker_Smooth_sj_cj.meanbw = ksmooth(s_j,c_j,kernel="normal", MeanBW,
@@ -329,14 +230,11 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
     Gaus_Ker_Smooth_sj_cj.meanbw.DF <- Gaus_Ker_Smooth_sj_cj.meanbw.DF[complete.cases(Gaus_Ker_Smooth_sj_cj.meanbw.DF), ]
 
 
-    # Remove 0s
     Gaus_Ker_Smooth_sj_cj.DF         <- Gaus_Ker_Smooth_sj_cj.DF[ min( which ( Gaus_Ker_Smooth_sj_cj.DF$y != 0 )):max( which( Gaus_Ker_Smooth_sj_cj.DF$y != 0 )), ]
     Gaus_Ker_Smooth_sj_cj.optbw.DF   <- Gaus_Ker_Smooth_sj_cj.optbw.DF[ min( which ( Gaus_Ker_Smooth_sj_cj.optbw.DF$y != 0 )):max( which( Gaus_Ker_Smooth_sj_cj.optbw.DF$y != 0 )), ]
     Gaus_Ker_Smooth_sj_cj.meanbw.DF  <- Gaus_Ker_Smooth_sj_cj.meanbw.DF[ min( which ( Gaus_Ker_Smooth_sj_cj.meanbw.DF$y != 0 )):max( which( Gaus_Ker_Smooth_sj_cj.meanbw.DF$y != 0 )), ]
 
     if(datatyp == "FC"){
-      #1% threshold
-      #MaxMinDT = 10
       MinDensThreshold = round(max(Gaus_Ker_Smooth_sj_cj.DF$y)*ifelse(max(Gaus_Ker_Smooth_sj_cj.DF$y)>100, 0.1, 0.01))
 
 
@@ -348,17 +246,14 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
     }
     if(datatyp == "scRNASeqLogNormCount"){
 
-      #1% threshold
       if(RCSmodeBL) {
-        MinDensThreshold = 1 #round( max(Gaus_Ker_Smooth_sj_cj.DF$y)*ifelse(max(Gaus_Ker_Smooth_sj_cj.DF$y)>1000, 0.1, 0.01))
+        MinDensThreshold = 1
 
       } else {
         MinDensThreshold = round( max(Gaus_Ker_Smooth_sj_cj.DF$y)*ifelse(max(Gaus_Ker_Smooth_sj_cj.DF$y)>1000, 0.1, 0.05))
 
       }
-      #MaxMinDT = 1
 
-      #if the data represents the line y=1, the entire dataset gets removed and causes NAs
       if(nrow(subset(Gaus_Ker_Smooth_sj_cj.DF, y > MinDensThreshold))>2) Gaus_Ker_Smooth_sj_cj.DF         <- subset(Gaus_Ker_Smooth_sj_cj.DF, y > MinDensThreshold)
       if(nrow(subset(Gaus_Ker_Smooth_sj_cj.optbw.DF, y > MinDensThreshold))>2) Gaus_Ker_Smooth_sj_cj.optbw.DF   <- subset(Gaus_Ker_Smooth_sj_cj.optbw.DF, y > MinDensThreshold)
       if(nrow(subset(Gaus_Ker_Smooth_sj_cj.meanbw.DF, y > MinDensThreshold))>2) Gaus_Ker_Smooth_sj_cj.meanbw.DF  <- subset(Gaus_Ker_Smooth_sj_cj.meanbw.DF, y > MinDensThreshold)
@@ -379,7 +274,6 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
     if(class(Gaus_Ker_Smooth_sj_cj.DF)=="try-error"){
       if(class(Gaus_Ker_Smooth_sj_cj.optbw.DF)=="try-error"){
         if(class(Gaus_Ker_Smooth_sj_cj.meanbw.DF)=="try-error"){
-          #all are error so get original DF
           Gaus_Ker_Smooth_sj_cj.DF         <- as.data.frame(Gaus_Ker_Smooth_sj_cj)
         } else{
           Gaus_Ker_Smooth_sj_cj.DF         <- Gaus_Ker_Smooth_sj_cj.meanbw.DF
@@ -393,13 +287,9 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
     }
 
 
-
-    # print(paste("Freq of rows lost due to smoothing: %", round((length(Gaus_Ker_Smooth_sj_cj$x) - nrow(Gaus_Ker_Smooth_sj_cj.DF))/length(Gaus_Ker_Smooth_sj_cj$x)*100,4), sep=""))
-
     SMmin.try   <- try(SmartMinimaAk(Gaus_Ker_Smooth_sj_cj.DF, print2screen = T, learnRate=ifelse(datatyp=="FC", 0.0000001 ,0.00001), mode=ifelse(RCSmodeBL, "MedianAllMin", ifelse(datatyp=="FC","MedianAll", "MedianAll")) ), silent = T)
 
 
-    #try 3 times to get it
     if(class(SMmin.try)=="try-error"){
       SMmin.try   <- try(SmartMinimaAk(Gaus_Ker_Smooth_sj_cj.DF, print2screen = F, learnRate=ifelse(datatyp=="FC", 0.0000001 ,0.0001), mode=ifelse(RCSmodeBL, "LeftOfPeakNPavg", ifelse(datatyp=="FC","MedianAll", "MedianAll")) ), silent = T)
       if(class(SMmin.try)=="try-error"){
@@ -407,7 +297,6 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
       }
     }
 
-    #if still error, try else
     if(class(SMmin.try)=="try-error"){
 
       SMmin.meanbw.try  <- try(SmartMinimaAk(Gaus_Ker_Smooth_sj_cj.meanbw.DF, print2screen = T, learnRate=ifelse(datatyp=="FC", 0.0000001 ,0.00001), mode=ifelse(RCSmodeBL, "LeftOfPeakNPavg", ifelse(datatyp=="FC","NPZAvg", "NP")) ), silent = T)
@@ -418,17 +307,12 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
 
         if(class(SMmin.optbw.try)=="try-error"){
-          ###No GD Minima Found regardless of bw adjustments
-          #minimaErr = T
-          #heuristic attempt
           SMmin.heur <- try(Gaus_Ker_Smooth_sj_cj.DF[find_peaks(-1*Gaus_Ker_Smooth_sj_cj.DF$y),])
 
           if(class(SMmin.heur)=="try-error"){
-            #find a place in teh center at least :(
             SMmin.heur <- Gaus_Ker_Smooth_sj_cj.DF[which.min(abs(Gaus_Ker_Smooth_sj_cj.DF$x - median(Gaus_Ker_Smooth_sj_cj.DF$x))),]
           } else {
             if(nrow(SMmin.heur)==0) {
-              #find a place in teh center at least :(
               SMmin.heur <- Gaus_Ker_Smooth_sj_cj.DF[which.min(abs(Gaus_Ker_Smooth_sj_cj.DF$x - median(Gaus_Ker_Smooth_sj_cj.DF$x))),]
             }
           }
@@ -438,47 +322,31 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
                            Minima = SMmin.heur)
 
         } else{
-          #SMmin.optbw.try
           SMmin.ls <- SMmin.optbw.try
-          #ShortLoop = 10 #end the loop
         }
       } else {
-        #SMmin.meanbw.try
         SMmin.ls <- SMmin.meanbw.try
-        #ShortLoop = 10 #end the loop
       }
     } else {
-      #SMmin.try
       SMmin.ls <- SMmin.try
-      #ShortLoop = 10 #end the loop
     }
 
 
-    #}#end of while(ShortLoop)
-
-
-
-    #SMmin.ls
-
     if(save2file){
-      fileID = paste(BaseFigDIR, "/alg4_KeyOptima_", names(task_list)[tn], "_", round(h_bandwidth[tn],4), ".png",sep="" )
+      fileID = paste(BaseFigDIR, "/alg4_KeyOptima_", names(task_list)[tn], "_", round(h_bandwidth_val,4), ".png",sep="" )
       png(fileID, width = 1024, height = 768, units = "px")
 
       plot(as.data.frame(cbind(s_j, c_j)), typ="l", lwd=2, col="grey")
       points((Gaus_Ker_Smooth_sj_cj.DF), col="red", pch=19)
-      #points((Gaus_Ker_Smooth_sj_cj.optbw.DF), col="dodgerblue", pch=19)
-      #points((Gaus_Ker_Smooth_sj_cj.meanbw.DF), col="plum", pch=19)
       abline(h=MinDensThreshold, lty=3, col="navy")
 
       lines(Gaus_Ker_Smooth_sj_cj.DF, type="l", col="dodgerblue", lwd=2,
             main=paste("Key Local Optima on test sample: ",names(task_list)[tn] , sep=""),
             xlim=range(min(Gaus_Ker_Smooth_sj_cj$x),max(Gaus_Ker_Smooth_sj_cj$x)));
-      #abline(v=alg1_result$baselineSVM[tn,2], col="red", lwd=2);
       abline(v=-alg3_result[tn], col="dodgerblue", lwd=2)
       abline(v=-alg2_result$U_robust["b.int"], col="forestgreen", lty=2, lwd=2);
       abline(v=SMmin.ls$PeakA, col="orange", lwd=2);
       abline(v=SMmin.ls$PeakB, col="orange", lwd=2);
-      #abline(v=MinimaS_j$x, col="cyan", lwd=2, lty=3)
       abline(v=SMmin.ls$Minima$x, col="purple", lwd=2, lty=3)
 
 
@@ -495,17 +363,11 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
     s_j_KeyOptima <- c(LocMin = SMmin.ls$Minima, peakYB = SMmin.ls$PeakB, peakYA = SMmin.ls$PeakA )
     names(s_j_KeyOptima) <- c("LocMin","peakYB","peakYA")
 
-    b_updated_alg4[tn] <- s_j_KeyOptima[c("LocMin")]
+    as.data.frame(cbind(alg3_b_upd=alg3_result[tn], alg4_b_upd = (s_j_KeyOptima[c("LocMin")])))
+  })
 
+  SVM_b_all.df <- rbindlist(bias_outputs)
 
-    par(mfrow=c(1,1))
-
-    #SVM_b_all[[tn]] <- cbind(alg1_result$baselineSVM[tn,ncol(alg1_result$baselineSVM)], alg3_b_upd=alg3_result[tn], alg4_b_upd = (b_updated_alg4[tn]));
-    SVM_b_all[[tn]] <- cbind(alg3_b_upd=alg3_result[tn], alg4_b_upd = (b_updated_alg4[tn]));
-
-  }
-
-  SVM_b_all.df <- rbindlist(lapply(SVM_b_all, as.data.frame))
 
   #correction based on position
   SVM_b_all.df$alg4_b_upd <- as.numeric(SVM_b_all.df$alg3_b_upd) + as.numeric(SVM_b_all.df$alg4_b_upd)
@@ -519,6 +381,3 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
 
 }
-
-
-

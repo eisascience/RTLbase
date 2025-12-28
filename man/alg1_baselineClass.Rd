@@ -15,7 +15,10 @@ alg1_baselineClass(
   transX = FALSE,
   sampleRed = FALSE,
   doParalellSVM = FALSE,
-  datatyp = "FC"
+  datatyp = "FC",
+  use_parallel = FALSE,
+  parallel_cores = NULL,
+  wide_data_threshold = 200
 )
 }
 \arguments{
@@ -44,6 +47,12 @@ alg1_baselineClass(
 \item{doParalellSVM}{Logical; use a parallelized SVM fit when \code{TRUE}.}
 
 \item{datatyp}{Character flag indicating data type (e.g., \code{"FC"} for flow cytometry).}
+
+\item{use_parallel}{Logical; parallelize per-dataset training when \code{TRUE}.}
+
+\item{parallel_cores}{Optional integer overriding the detected core count.}
+
+\item{wide_data_threshold}{Integer; when the number of columns exceeds this threshold, inputs are coerced via \code{data.table} to minimize copies.}
 }
 \value{
 A list containing the baseline hyperplanes, per-dataset results, and metadata

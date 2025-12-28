@@ -15,7 +15,10 @@ alg3_shiftComp(
   datatyp = "FC",
   useAbsCor = TRUE,
   medianMediansBL = FALSE,
-  CoreClassifier
+  CoreClassifier,
+  use_parallel = FALSE,
+  parallel_cores = NULL,
+  wide_data_threshold = 200
 )
 }
 \arguments{
@@ -44,6 +47,12 @@ alg3_shiftComp(
 \item{medianMediansBL}{Logical; use the median of medians strategy for shift estimation.}
 
 \item{CoreClassifier}{Core classifier identifier (e.g., \code{"LinSVM"}).}
+
+\item{use_parallel}{Logical; parallelize per-task shift estimation when \code{TRUE}.}
+
+\item{parallel_cores}{Optional integer overriding the detected core count.}
+
+\item{wide_data_threshold}{Integer; when data are wide, coerce with \code{data.table} to reduce copies before projection.}
 }
 \value{
 A numeric vector of updated intercepts per task.

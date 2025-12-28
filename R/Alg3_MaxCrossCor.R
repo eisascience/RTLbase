@@ -81,13 +81,18 @@ ccfmaxV3 <- function(a, b, e=0, maxLag, useAbsCor = T)
 #' @param medianMediansBL Logical; use the median of medians strategy for shift
 #'   estimation.
 #' @param CoreClassifier Core classifier identifier (e.g., `"LinSVM"`).
+#' @param use_parallel Logical; parallelize per-task shift estimation when `TRUE`.
+#' @param parallel_cores Optional integer overriding the detected core count.
+#' @param wide_data_threshold Integer; when data are wide, coerce with
+#'   `data.table` to reduce copies before projection.
 #'
 #' @return A numeric vector of updated intercepts per task.
 #' @export
 alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
                            print2screen, save2file, maximumLag, ImpFeats,
                            ADM=F, datatyp="FC", useAbsCor = T, medianMediansBL = F,
-                           CoreClassifier){
+                           CoreClassifier, use_parallel = FALSE, parallel_cores = NULL,
+                           wide_data_threshold = 200){
 
   # task_list      = TestXls.t;
   # source_list    =  TrainXls.t;
@@ -120,132 +125,71 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
 
 
 
-  task_hat <- vector(mode="list")
-  source_hat <- vector(mode="list")
-
-  for (m in 1:M) {
-
-    # if(!exists("m")) m = 1
-
+  source_hat <- map_with_backend(seq_len(M), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(m){
     if(print2screen) print(paste("Inference of class by the datasets's baseline hyperplane #", m,sep=""))
 
-    if(is.na(ImpFeats)[1]){
-      SOURCE <- as.data.frame(source_list[[m]])[,]
-    } else {
-      SOURCE <- as.data.frame(source_list[[m]])
+    SOURCE <- coerce_feature_frame(source_list[[m]], ImpFeats, wide_data_threshold = wide_data_threshold)
+
+    if(ADM) {
+      SOURCE_proc <- AllDataManipulations(SOURCE,
+                                          Scale=ScalePerCh,
+                                          Center=MaxPerCh,
+                                          globalASINhTrans = ifelse(datatyp=="FC", T, F),
+                                          globalRange1010Scale = F,
+                                          globalScaleByVal = F)
+      if(!is.na(ImpFeats[1])) SOURCE_proc <- SOURCE_proc[,ImpFeats]
+      SOURCE <- coerce_feature_frame(SOURCE_proc,
+                                     ImpFeats, wide_data_threshold = wide_data_threshold)
     }
 
-    #violinMyDF(SOURCE, title=paste("SOURCE data #", m, sep=""), y.title="value", x.title="feats")
-
-
-
-
-    #boxplot(SOURCE)
-    #change ADM to TransX
-    if(ADM) SOURCE <- as.data.frame(AllDataManipulations(SOURCE,
-                                                         Scale=ScalePerCh,
-                                                         Center=MaxPerCh,
-                                                         globalASINhTrans = ifelse(datatyp=="FC", T, F),
-                                                         globalRange1010Scale = F,
-                                                         globalScaleByVal = F))[,ImpFeats]
-
-    #helps if 1D data vs nD
     if(ncol(SOURCE)==1){
-      ###########################CLASSIFIER Selection
       SOURCE <- as.data.frame(cbind(SOURCE, rep(ifelse(CoreClassifier=="LinSVM", -1, 1), length(SOURCE))))
       colnames(SOURCE) <- c("X", "interc_multp")
     } else {
-      ###########################CLASSIFIER Selection
       SOURCE$interc_multp <- rep(ifelse(CoreClassifier=="LinSVM", -1, 1), nrow(SOURCE))
     }
-    source_hat[[m]] <- as.data.frame(as.matrix(SOURCE) %*% hyp.alg2)
-
-
-
-
-    #-1 beacause the $rho returned from the svm() fx is the neg int
-
-    # #z_m_i
-    # w_vec.alg2  <- alg2_result$U_robust[1:(length(alg2_result$U_robust)-1)]
-    # bint.alg2   <- alg2_result$U_robust[length(alg2_result$U_robust)]
-    # hyp.alg2 <- -c(w_vec.alg2, b.int=bint.alg2)
-
-    #hyp.alg2 <- c(w_vec.alg2, b.int=bint.alg2)
-
-
-
-    # table(pred=factor(sign(source_hat[[m]])[,1], levels=c(-1,1)),tru=factor(Kfold.TrainingSets.ls[[1]]$y[[m]], levels=c(-1,1)))
-
-    #plot(density(source_hat[[m]][,1]))
-
-
-  }
+    as.data.frame(as.matrix(SOURCE) %*% hyp.alg2)
+  })
   names(source_hat) <- names(source_list)
 
-  for (j in 1:n_testSets) {
-
-    #if(!exists("j")) j = 1
-
+  task_hat <- map_with_backend(seq_len(n_testSets), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(j){
     if(print2screen) print(paste("Mapping to Y_hat for Task: ", j, sep=""))
 
-    if(is.na(ImpFeats)[1]){
-      TASK <- as.data.frame(task_list[[j]])[,]
-    } else {
-      TASK <- as.data.frame(task_list[[j]])
+    TASK <- coerce_feature_frame(task_list[[j]], ImpFeats, wide_data_threshold = wide_data_threshold)
+
+    if(ADM) {
+      TASK_proc <- AllDataManipulations(TASK,
+                                        Scale=ScalePerCh,
+                                        Center=MaxPerCh,
+                                        globalASINhTrans = ifelse(datatyp=="FC", T, F),
+                                        globalRange1010Scale = F,
+                                        globalScaleByVal = F)
+      if(!is.na(ImpFeats[1])) TASK_proc <- TASK_proc[,ImpFeats]
+      TASK <- coerce_feature_frame(TASK_proc,
+                                   ImpFeats, wide_data_threshold = wide_data_threshold)
     }
 
-    if(ADM) TASK <- as.data.frame(AllDataManipulations(TASK,
-                                                       Scale=ScalePerCh,
-                                                       Center=MaxPerCh,
-                                                       globalASINhTrans = ifelse(datatyp=="FC", T, F),
-                                                       globalRange1010Scale = F,
-                                                       globalScaleByVal = F))[,ImpFeats]
-    #boxplot(TASK)
-
-    # ggplot(melt(TASK), aes(x = variable, y = value)) + geom_violin() +
-    #   theme_bw() +
-    #   theme(plot.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=25, hjust=0.5)) +
-    #   theme(axis.title = element_text(family = "Trebuchet MS", color="#666666", face="bold", size=20)) +
-    #   labs(title = paste("TASK data #", j, sep=""), y = "value", x = "channels")+
-    #   theme(axis.ticks.x=element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
-    #   scale_colour_manual(values = col_vector)
-
-
-
     if(ncol(TASK)==1){
-      ###########################CLASSIFIER Selection
       TASK <- as.data.frame(cbind(TASK, rep(ifelse(CoreClassifier=="LinSVM", -1, 1), length(TASK))))
       colnames(TASK) <- c("X", "interc_multp")
     } else {
-      ###########################CLASSIFIER Selection
       TASK$interc_multp <- rep(ifelse(CoreClassifier=="LinSVM", -1, 1), nrow(TASK))
     }
 
-
-    task_hat[[j]] <- as.data.frame(as.matrix(TASK) %*% hyp.alg2)
-    #z_t_i
-
-
-  }
+    as.data.frame(as.matrix(TASK) %*% hyp.alg2)
+  })
   names(task_hat) <- names(task_list)
 
   if(print2screen) print("step3 reached, task and source are mapped, starting Max-Cross Corr")
 
-  e_med_mat <- vector(mode="list")
-  cor_e_med_mat <- vector(mode="list")
-  MS_med_mat <- vector(mode="list")
-
-
-
-  for (t in 1:n_testSets){
-    #default behavior
-    #t=1
+  per_task_results <- map_with_backend(seq_len(n_testSets), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(t){
     if(print2screen) print(paste("starting cross-cor for Task: ", t, sep=""))
-    if (maximumLag == 0){
+    maxLagLocal <- maximumLag
+    if (maxLagLocal == 0){
       if(length(source_hat[[1]][,1])<50){
-        maximumLag   =  length(source_hat[[1]][,1])
+        maxLagLocal   =  length(source_hat[[1]][,1])
       } else{
-        maximumLag   =  length(source_hat[[1]][,1])/10
+        maxLagLocal   =  length(source_hat[[1]][,1])/10
       }
 
     }
@@ -254,31 +198,23 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
     cor_e <- vector()
     MS <- vector()
 
-    #M source, T tasks
     for (i in 1:M) {
-      #i=1; t=1
 
-      #need to oversmooth, else cross correlations can be spourious
       DensA <- density(task_hat[[t]][,1], n=length(task_hat[[t]][,1]))
       bwsig = DensA$bw
       if(print2screen) print(paste("with source: ", i, sep=""))
-      #plot(DensA)
 
       CorThresh = 0.9
-      #set rep4Rpba = 1 to match Lee et al. version
-      rep4Roba = 3 #50
-
-      #plot(density(source_hat[[i]][,1]))
+      rep4Roba = 3
 
       RobustCrossCorLagALL <- lapply(1:rep4Roba, function(id){
-        #id = 1
         set.seed(abs(round(rnorm(id)*30000))[id])
 
         DensB1 <- density(source_hat[[i]][,1][sample(1:length(source_hat[[i]][,1]), min(c(length(source_hat[[i]][,1]), length(task_hat[[t]][,1]))))], bw=bwsig, n=length(task_hat[[t]][,1]))
 
         e_resamp <- ccfmaxV3(DensA$y,
                              DensB1$y,
-                             maxLag = maximumLag, useAbsCor = useAbsCor);
+                             maxLag = maxLagLocal, useAbsCor = useAbsCor);
         if(e_resamp$cor >= CorThresh) return(e_resamp)
 
       })
@@ -292,16 +228,13 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
       while(is.na(RobustCrossCorLag)){
         if(print2screen) print(paste("robust cross-cor failed w. threshold: ", CorThresh, sep=""))
         CorThresh <- CorThresh - 0.01
-        rep4Robb = 10 #50
+        rep4Robb = 10
         RobustCrossCorLagALL <- lapply(1:rep4Robb, function(id){
           set.seed(abs(round(rnorm(1)*30000)))
           DensB1 <- density(source_hat[[i]][,1][sample(1:length(source_hat[[i]][,1]), min(c(length(source_hat[[i]][,1]), length(task_hat[[t]][,1]))))], bw=bwsig, n=length(task_hat[[t]][,1]))
-          #plot(DensA, col="dodgerblue")
-          #lines(DensB1)
-          #InterpolatedDens <- approx(DensA$y, DensB1$y)
           e_resamp <- ccfmaxV3(DensA$y,
                                DensB1$y,
-                               maxLag = maximumLag, useAbsCor = useAbsCor);
+                               maxLag = maxLagLocal, useAbsCor = useAbsCor);
           if(e_resamp$cor > CorThresh) return(e_resamp)
 
         });
@@ -325,19 +258,11 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
 
       DensB1 <- density(source_hat[[i]][,1], n=length(source_hat[[i]][,1]))
 
-      # plot(DensA, col="dodgerblue")
-      # lines(DensB1)
-
 
       if(RobustCrossCorLag <  0) deltaLag = (DensB1$x[abs(RobustCrossCorLag)] - DensA$x[1])
       if(RobustCrossCorLag >  0) deltaLag = -(DensB1$x[abs(RobustCrossCorLag)] - DensA$x[1])
       if(RobustCrossCorLag == 0) deltaLag = 0
 
-      # plot(x=DensA$x, y=DensA$y)
-      # lines(x=DensB1$x, y=DensB1$y)
-
-
-      #deltaLag <- - e_resamp[,2]
       MedianShift <- median(task_hat[[t]][,1]) - median(source_hat[[i]][,1])
 
 
@@ -355,7 +280,7 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
 
         ccfig <- ccf(DensA$y,
                      DensB1$y,
-                     plot = F, lag.max = maximumLag)
+                     plot = F, lag.max = maxLagLocal)
         corTemp = round(ccfig$acf[,,1], 3)
         if(useAbsCor) corTemp = abs(corTemp)
         lagTemp = ccfig$lag[,,1]
@@ -364,7 +289,6 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
         abline(v=RobustCrossCorLag, lwd=2, lty=2, col="red")
 
         plot(DensA, type='l',lwd=2, col="dodgerblue", main="pre-shift")
-        #lines(density(task_hat[[t]][,1], bw=.1), type='l', col="red")
         lines(DensB1, lwd=2, col='firebrick')
 
 
@@ -376,7 +300,6 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
                         "\nMax(abs(Cor)) >= thr",
                         " and lag : ", round(RobustCrossCorLag,3),sep=""))
         lines(DensB1, lwd=2, col="firebrick")
-        #lines(DensA, type='l',lwd=1, lty=3, col="black")
 
 
         D2<- as.data.frame(cbind(x=DensA$x - MedianShift, y=DensA$y))
@@ -394,14 +317,13 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
       e[i] <- deltaLag
       cor_e[i] <- RobustCrossCor
       MS[i] <- MedianShift
-      #e[i] <- e_resamp[,2]
     }
-    e_med_mat[[t]] <- e
-    cor_e_med_mat[[t]] <- cor_e
-    MS_med_mat[[t]] <- MS
+    list(e = e, cor_e = cor_e, MS = MS)
+  })
 
-    maximumLag = 0
-  }
+  e_med_mat <- lapply(per_task_results, function(res) res$e)
+  cor_e_med_mat <- lapply(per_task_results, function(res) res$cor_e)
+  MS_med_mat <- lapply(per_task_results, function(res) res$MS)
 
   #names(e_med_mat) <- names(task_hat)
   #names(cor_e_med_mat) <- names(task_hat)
@@ -501,8 +423,6 @@ alg3_shiftComp <- function(source_list, task_list, alg1_result, alg2_result,
   return(b_updated)
 
 }
-
-
 
 
 
