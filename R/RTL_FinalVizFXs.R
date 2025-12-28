@@ -19,9 +19,15 @@
 #'   weights.
 #' @param datatyp Character flag indicating data type (e.g., `"FC"`).
 #' @param ADM Logical; apply additional data manipulations.
+#' @param save_plots Logical; when `TRUE` save plots to `save_dir`.
+#' @param save_dir Optional directory where plots are written when
+#'   `save_plots` is `TRUE`. Defaults to a temporary directory.
+#' @param save_prefix Prefix used for saved plot filenames.
+#' @param verbose Logical; print progress updates.
+#' @param legend_title Legend title used in the generated plots.
 #'
-#' @return A list of ggplot objects, combined statistics, and per-task
-#'   predictions for each algorithm stage.
+#' @return A structured list (class `rtl_final_viz`) of ggplot objects,
+#'   combined statistics, and per-task predictions for each algorithm stage.
 #' @export
 FinalViz <- function(TrainTestSet.ls,
                      alg1_result,
@@ -30,14 +36,32 @@ FinalViz <- function(TrainTestSet.ls,
                      alg4_result,
                      alg6_result,
                      datatyp,
-                     ADM){
+                     ADM,
+                     save_plots = FALSE,
+                     save_dir = NULL,
+                     save_prefix = "alg6_Classification",
+                     verbose = FALSE,
+                     legend_title = "Model Stage"){
 
   #TrainTestSet.ls = TestXY.ls
+
+  verbose <- isTRUE(verbose)
+  save_plots <- isTRUE(save_plots)
+  palette <- ColorTheme()
+  col_vector <- palette$col_vector
+  colour_map <- setNames(col_vector[seq_len(3)], c("2.baseline", "1.alg4", "0.alg6"))
+
+  if (save_plots && is.null(save_dir)) {
+    save_dir <- file.path(tempdir(), "RTLbase_finalviz")
+  }
+  if (save_plots) {
+    dir.create(save_dir, recursive = TRUE, showWarnings = FALSE)
+  }
 
   ChangeAcross <- lapply(1:length(TrainTestSet.ls), function(x.ds){
     #x.ds = 1
     x.ds <- as.numeric(x.ds[1])
-    print(x.ds)
+    if(verbose) message(sprintf("Scoring dataset %s", names(TrainTestSet.ls)[x.ds]))
 
     X_test <- as.data.frame(TrainTestSet.ls[[x.ds]]$X.test)
     #X_train <- as.data.frame(TrainTestSet.ls[[x.ds]]$X.train)
@@ -155,17 +179,22 @@ FinalViz <- function(TrainTestSet.ls,
       theme_bw() +
       theme(plot.title = element_text( color="#666666", face="bold", size=25, hjust=0.5)) +
       theme(axis.title = element_text( color="#666666", face="bold", size=20)) + ylim(-5,105) +
-      labs(title = paste("Classification by Hyperplanes\n", sep=""), y = "value(%)", x = "statistic")+
+      labs(title = "RTL hyperplane classification comparison",
+           subtitle = "Baseline vs bias vs normal vector updates",
+           y = "Metric (%)", x = "Statistic",
+           colour = legend_title, size = legend_title)+
       theme(axis.ticks.x=element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
-      scale_colour_manual(values = col_vector)
+      scale_colour_manual(values = colour_map, name = legend_title) +
+      scale_size_manual(values = c("2.baseline"=2.5,"1.alg4"=3,"0.alg6"=3.5), name = legend_title)
 
     gg
     #plot(gg)
 
 
-    fileID = paste(BaseFigDIR, "/alg6_ClassificationCompB_", names(TrainTestSet.ls)[x.ds], ".png",sep="" )
-
-    ggsave(fileID, width = 30, height = 30, units = "cm", dpi=100)
+    if (save_plots) {
+      fileID <- file.path(save_dir, paste0(save_prefix, "CompB_", names(TrainTestSet.ls)[x.ds], ".png"))
+      ggsave(fileID, width = 30, height = 30, units = "cm", dpi=100)
+    }
 
 
     #pp <- plotly()
@@ -201,28 +230,30 @@ FinalViz <- function(TrainTestSet.ls,
     facet_wrap(~factor(variable)) +
     theme_bw() + theme(plot.title = element_text( color="#666666", face="bold", size=25, hjust=0.5)) +
     theme(axis.title = element_text( color="#666666", face="bold", size=20)) + ylim(-5,105) +
-    labs(title = paste("Classification by Hyperplanes\n", sep=""), y = "value(%)", x = "statistic") +
+    labs(title = "RTL hyperplane classification comparison",
+         subtitle = "Across held-out tasks",
+         y = "Metric (%)", x = "Statistic",
+         colour = legend_title, size = legend_title) +
     theme(axis.ticks.x=element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
-    scale_colour_manual(values = col_vector)
+    scale_colour_manual(values = colour_map, name = legend_title) +
+    scale_size_manual(values = c("2.baseline"=2.5,"1.alg4"=3,"0.alg6"=3.5), name = legend_title)
 
-  plot(gg3)
+  if(verbose) print(gg3)
 
-  fileID = paste(BaseFigDIR, "/alg6_ClassificationCompALL", ".png",sep="" )
-
-  ggsave(fileID, width = 60, height = 60, units = "cm", dpi=120)
+  if (save_plots) {
+    fileID <- file.path(save_dir, paste0(save_prefix, "CompALL.png"))
+    ggsave(fileID, width = 60, height = 60, units = "cm", dpi=120)
+  }
 
   #pp3 <- plotly()
   #pp3$ggplotly(gg3, session="knitr")
 
-
-
-  return(list(gg.figs=list(A=gg3),
-              comStats = comStats,
-              comStats.sub = comStats.sub,
-              ChangeAcross = ChangeAcross))
+  result <- list(gg.figs=list(A=gg3),
+                 comStats = comStats,
+                 comStats.sub = comStats.sub,
+                 ChangeAcross = ChangeAcross,
+                 metadata = list(save_dir = save_dir, save_plots = save_plots))
+  class(result) <- "rtl_final_viz"
+  return(result)
 
 }
-
-
-
-

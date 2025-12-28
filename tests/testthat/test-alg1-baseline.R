@@ -16,7 +16,7 @@ test_that("baseline classifier returns expected structure", {
     K_forCrossV = 2,
     svmGamma = 0.1,
     svmCost = 1,
-    prnt2scr = FALSE,
+    verbose = FALSE,
     X_cols2Keep = 1
   )
 

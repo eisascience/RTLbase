@@ -51,112 +51,120 @@
 #'
 #' @param alg1_result_baselineSVM Matrix of hyperplane parameters from
 #'   [alg1_baselineClass()] where each row represents a source model.
-#' @param print2screen Logical; print progress updates.
-#'
+#' @param verbose Logical; print progress updates.
+#' 
 #' @return A list containing robust/simple means, covariance matrices, and
 #'   normalized vectors used by downstream algorithms.
 #' @export
-alg2_rob_meanNCov <- function(alg1_result_baselineSVM, print2screen = F){
-  #alg1_result_baselineSVM <- alg1_res$baselineSVM; print2screen = T
+alg2_rob_meanNCov <- function(alg1_result_baselineSVM, verbose = FALSE, print2screen = NULL){
+  #alg1_result_baselineSVM <- alg1_res$baselineSVM; verbose = T
 
+  verbose <- isTRUE(verbose) || isTRUE(print2screen)
 
-  if(is.null(alg1_result_baselineSVM)) print("alg1_result_baselineSVM is Null") else {
-
-    if(nrow(alg1_result_baselineSVM)>1) {
-
-      if(print2screen) print("starting Alg 2 to obtain robust mean and covariance of SVM hyperplane parameters")
-
-
-      #baselineSVM is a matrix of concatination of the normal vector and the y-intercept (bias)
-      baselineSVM <- alg1_result_baselineSVM
-
-
-
-      #INITIALIZE: C is covariance and U is mean
-
-      C <- cov(baselineSVM); C
-      try.U <- try(CovEM(baselineSVM), silent = T)
-      if(!(class(try.U)=="try-error")) {
-        res <- CovEM(baselineSVM) #Gaussian MLE of mean and covariance
-        U <- getLocation(res); #equal to getting mean as U <- sapply(baselineSVM, mean); U
-        names(U) <- colnames(C); U
-        colnames(C) <- names(U)
-        rownames(C) <- names(U)
-      } else {
-        U <- as.vector(mode="numeric", colMeans(baselineSVM))
-        names(U) <- colnames(C); U
-      }
-
-      #C <- getScatter(res);C # different to cov()
-
-
-      # respmh <- GSE::partial.mahalanobis(baselineSVM, mu=U, S=C)
-      # plot(respmh, which="index")
-      # getDist(respmh)
-
-      #huber pairwise estimation; using prev. built for now
-      #c0 is the tuning constant for the huber function.
-      #c0=0 would yield QC. Default is c0=1.345
-
-
-      resHub <-try(HuberPairwise(as.matrix(baselineSVM), psi=c("huber"), c0=1.345, computePmd=TRUE), silent = T)
-
-      if(!(class(try.U)=="try-error")) {
-        #getDist(resHub)
-        #plot(resHub, which="index")
-
-        # resHub@R #correlation matrix
-        # resHub@mu #the mean weighted by the Huber loss function, a robust loss fx
-        # resHub@pmd #partial mahalanobis
-        # resHub@S #the cov weighted by the Huber loss function, a robust loss fx
-        # resHub@x
-
-
-        #OUTPUT:
-        #U #the simple mean
-        U_robust <- resHub@mu; U_robust
-        #C #the simple cov
-        C_robust <- resHub@S; colnames(C_robust) <- colnames(C);
-        rownames(C_robust) <- colnames(C); C_robust
-
-        remove(res)
-
-      } else {
-
-        #OUTPUT:
-        #U #the simple mean
-        U_robust <- U
-        #C #the simple cov
-        C_robust <- C;
-
-      }
-
-
-
-
-      alg2_CalcMore_res <- alg2_CalcMore(list(U_simple=U, U_robust=U_robust, C_simple=C, C_robust=C_robust))
-
-      names(alg2_CalcMore_res$U_robust_norm) <- names(baselineSVM)
-
-      if(print2screen) print("Alg 2 has completed!")
-    }
-
-    if(nrow(alg1_result_baselineSVM) == 1) {
-
-
-
-
-
-    }
-
-
-
-
-
-
-    return(alg2_CalcMore_res)
-
+  if(is.null(alg1_result_baselineSVM)) {
+    stop("alg1_result_baselineSVM is Null", call. = FALSE)
   }
+
+  if(nrow(alg1_result_baselineSVM)>1) {
+
+    if(verbose) message("starting Alg 2 to obtain robust mean and covariance of SVM hyperplane parameters")
+
+
+    #baselineSVM is a matrix of concatination of the normal vector and the y-intercept (bias)
+    baselineSVM <- alg1_result_baselineSVM
+
+
+
+    #INITIALIZE: C is covariance and U is mean
+
+    C <- cov(baselineSVM); C
+    try.U <- try(CovEM(baselineSVM), silent = T)
+    if(!(class(try.U)=="try-error")) {
+      res <- CovEM(baselineSVM) #Gaussian MLE of mean and covariance
+      U <- getLocation(res); #equal to getting mean as U <- sapply(baselineSVM, mean); U
+      names(U) <- colnames(C); U
+      colnames(C) <- names(U)
+      rownames(C) <- names(U)
+    } else {
+      U <- as.vector(mode="numeric", colMeans(baselineSVM))
+      names(U) <- colnames(C); U
+    }
+
+    #C <- getScatter(res);C # different to cov()
+
+
+    # respmh <- GSE::partial.mahalanobis(baselineSVM, mu=U, S=C)
+    # plot(respmh, which="index")
+    # getDist(respmh)
+
+    #huber pairwise estimation; using prev. built for now
+    #c0 is the tuning constant for the huber function.
+    #c0=0 would yield QC. Default is c0=1.345
+
+
+    resHub <-try(HuberPairwise(as.matrix(baselineSVM), psi=c("huber"), c0=1.345, computePmd=TRUE), silent = T)
+
+    if(!(class(try.U)=="try-error")) {
+      #getDist(resHub)
+      #plot(resHub, which="index")
+
+      # resHub@R #correlation matrix
+      # resHub@mu #the mean weighted by the Huber loss function, a robust loss fx
+      # resHub@pmd #partial mahalanobis
+      # resHub@S #the cov weighted by the Huber loss function, a robust loss fx
+      # resHub@x
+
+
+      #OUTPUT:
+      #U #the simple mean
+      U_robust <- resHub@mu; U_robust
+      #C #the simple cov
+      C_robust <- resHub@S; colnames(C_robust) <- colnames(C);
+      rownames(C_robust) <- colnames(C); C_robust
+
+      remove(res)
+
+    } else {
+
+      #OUTPUT:
+      #U #the simple mean
+      U_robust <- U
+      #C #the simple cov
+      C_robust <- C;
+
+    }
+
+
+
+
+    alg2_CalcMore_res <- alg2_CalcMore(list(U_simple=U, U_robust=U_robust, C_simple=C, C_robust=C_robust))
+
+    names(alg2_CalcMore_res$U_robust_norm) <- names(baselineSVM)
+
+    if(verbose) message("Alg 2 has completed!")
+  }
+
+  if(nrow(alg1_result_baselineSVM) == 1) {
+    baselineSVM <- alg1_result_baselineSVM
+    C <- cov(baselineSVM)
+    U <- as.vector(mode="numeric", colMeans(baselineSVM))
+    names(U) <- colnames(C)
+    colnames(C) <- names(U)
+    rownames(C) <- names(U)
+
+    alg2_CalcMore_res <- alg2_CalcMore(list(U_simple=U, U_robust=U, C_simple=C, C_robust=C))
+    names(alg2_CalcMore_res$U_robust_norm) <- colnames(baselineSVM)
+    if(verbose) message("Only one hyperplane supplied; returning empirical moments.")
+  }
+
+
+
+
+  if (!exists("alg2_CalcMore_res")) {
+    stop("No hyperplane parameters supplied to Algorithm 2.", call. = FALSE)
+  }
+
+  return(structure(alg2_CalcMore_res, class = "rtl_alg2_result"))
 
 }
 
@@ -194,7 +202,4 @@ alg2_CalcMore <- function(alg2_res) {
 
   return(alg2_res)
 }
-
-
-
 

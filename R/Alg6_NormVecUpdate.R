@@ -62,6 +62,9 @@
 #' @param RCSmodeBL Logical; enable rare-cell subset adjustments.
 #' @param RCSfreqSet Numeric vector specifying frequency thresholds for RCS mode.
 #' @param CoreClassifier Core classifier identifier (e.g., `"LinSVM"`).
+#' @param verbose Logical; print progress updates.
+#' @param save_dir Optional directory where diagnostic plots are written when
+#'   `save2file` is `TRUE`. Defaults to a temporary directory.
 #'
 #' @return A list containing updated normal vectors, smoothing metadata, and key
 #'   optima explored during the search.
@@ -69,9 +72,10 @@
 alg6_NormalVectorUpdate <- function(task_list, alg1_result,
                                     alg2_result, alg3_result,
                                     alg4_result, X_feat_cols,
-                                    Marg, save2file, ADM, datatyp="FC",
+                                    Marg, save2file = FALSE, ADM, datatyp="FC",
                                     RCSmodeBL = F, RCSfreqSet = c(0,0),
-                                    CoreClassifier = "LinSVM"){
+                                    CoreClassifier = "LinSVM", verbose = FALSE,
+                                    save_dir = NULL){
 
   # task_list = lapply(TrainTest.ls$TestSetXYls, function(x){x$X.test});
   # if(!exists("alg1_result"))   alg1_result = alg1_res;
@@ -93,9 +97,27 @@ alg6_NormalVectorUpdate <- function(task_list, alg1_result,
 
 
 
+  verbose <- isTRUE(verbose)
+  save2file <- isTRUE(save2file)
+  if (save2file && is.null(save_dir)) {
+    save_dir <- file.path(tempdir(), "RTLbase_alg6")
+  }
+  if (save2file) {
+    dir.create(save_dir, recursive = TRUE, showWarnings = FALSE)
+  }
+
+  palette <- ColorTheme()
+  col_vector <- palette$col_vector
+
+  alg3_intercepts <- if (inherits(alg3_result, "rtl_alg3_result")) alg3_result$intercepts else alg3_result
+  if (is.null(alg3_intercepts)) {
+    stop("alg3_result must supply intercept updates.", call. = FALSE)
+  }
+  alg4_bias <- if (inherits(alg4_result, "rtl_alg4_result")) alg4_result else as.data.frame(alg4_result)
+
   n_testSets = length(task_list)
 
-  print("starting Alg 6, Norm. Vec. Update")
+  if(verbose) message("starting Alg 6, Norm. Vec. Update")
 
 
 
@@ -118,15 +140,15 @@ alg6_NormalVectorUpdate <- function(task_list, alg1_result,
   for (m in 1:n_testSets) {
     # m=1
 
-    b_t_alg4 <- alg4_result[m,"b_alg_norm"]#/alg2_result$w_euc_mag
+    b_t_alg4 <- alg4_bias[m,"b_alg_norm"]#/alg2_result$w_euc_mag
 
-    print(paste(" robust mean hyperplane with alg4's updated bias for task #",m,":",sep=""));
+    if(verbose) message(paste(" robust mean hyperplane with alg4's updated bias for task #",m,":",sep=""));
     #print(b_t_alg4)
     if(class(b_t_alg4)=="list") b_t_alg4 <- unlist(b_t_alg4)
 
 
 
-    print(paste("...NormVecUpdate", m, sep=" "))
+    if(verbose) message(paste("...NormVecUpdate", m, sep=" "))
 
     TASK <- as.data.frame(task_list[[m]])
 
@@ -212,7 +234,7 @@ alg6_NormalVectorUpdate <- function(task_list, alg1_result,
       #length(printSet)
 
       if(save2file){
-        fileID = paste(BaseFigDIR, "/alg6_SampShifts_",names(task_list)[m], ".png",sep="" )
+        fileID = file.path(save_dir, paste0("alg6_SampShifts_", names(task_list)[m], ".png"))
         png(fileID, width = 1024*2, height = 768*2, units = "px")
         par(mfrow=c(5,6))
       }
@@ -449,7 +471,7 @@ alg6_NormalVectorUpdate <- function(task_list, alg1_result,
 
 
       if(save2file && (nrow(Gaus_Ker_Smooth_ak_ck.DF)>=3)  ){
-        fileID = paste(BaseFigDIR, "/alg6_NormVecUpdate_",m, ".png",sep="" )
+        fileID = file.path(save_dir, paste0("alg6_NormVecUpdate_", m, ".png"))
         png(file = fileID, bg = "transparent", width = 1500, height = 1500, units = "px", res=130)
 
         #plot(cbind(a_k,c_k),type="n",main=paste("minimizing a_k = ", round(ak_KeyOptima["LocMin"],3), "\n Smoothed Density with Gaus. kernel bw =", round(alg_6_h_bandwidth[m], 4)),xlab="x=a_k",ylab="y=count",
@@ -495,9 +517,9 @@ alg6_NormalVectorUpdate <- function(task_list, alg1_result,
   remove (TASK);
   colnames(alg6_w_new) <- names(w_t_org)
 
-
-  return(list(alg6_slope = as.numeric(alg6_slope), alg6_w_new = alg6_w_new, w_k_euc_mag_vec = w_k_euc_mag_vec, KeyOptima=KeyOptima))
+  result <- list(alg6_slope = as.numeric(alg6_slope), alg6_w_new = alg6_w_new, w_k_euc_mag_vec = w_k_euc_mag_vec, KeyOptima=KeyOptima, metadata = list(core_classifier = CoreClassifier, margin = Marg))
+  class(result) <- "rtl_alg6_result"
+  return(result)
 
 
 }
-

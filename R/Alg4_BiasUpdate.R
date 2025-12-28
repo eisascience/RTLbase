@@ -45,6 +45,8 @@
 #' @param alg3_result Vector of bias updates from [alg3_shiftComp()].
 #' @param goodColumns Optional column indices to retain.
 #' @param save2file Logical; persist diagnostic plots to disk.
+#' @param save_dir Optional directory where diagnostic plots are written when
+#'   `save2file` is `TRUE`. Defaults to a temporary directory.
 #' @param Marg Margin parameter controlling neighborhood width.
 #' @param alg4MinFx Mode selection for minima detection (`"gd"`, `"mean"`, `"win"`).
 #' @param ADM Logical; apply additional data manipulations.
@@ -54,6 +56,7 @@
 #' @param RCSmodeBL Logical; enable rare-cell subset adjustments.
 #' @param RCSfreqSet Numeric vector specifying frequency thresholds for RCS mode.
 #' @param CoreClassifier Core classifier identifier (e.g., `"LinSVM"`).
+#' @param verbose Logical; print progress updates.
 #' @param use_parallel Logical; parallelize per-task updates when `TRUE`.
 #' @param parallel_cores Optional integer overriding detected core count.
 #' @param wide_data_threshold Integer; coerce wide feature sets via `data.table`
@@ -64,11 +67,11 @@
 #' @export
 alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
                             alg3_result, goodColumns,
-                            save2file, Marg, alg4MinFx, ADM=F,
+                            save2file = FALSE, Marg, alg4MinFx, ADM=F,
                             useMedian = T, ZnormMappingBL=F, datatyp="FC",
                             RCSmodeBL = F, RCSfreqSet = c(0,0),
-                            CoreClassifier = "LinSVM", use_parallel = FALSE,
-                            parallel_cores = NULL, wide_data_threshold = 200){
+                            CoreClassifier = "LinSVM", verbose = FALSE, save_dir = NULL,
+                            use_parallel = FALSE, parallel_cores = NULL, wide_data_threshold = 200){
 
 
 
@@ -86,11 +89,33 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
 
 
+  verbose <- isTRUE(verbose)
+  save2file <- isTRUE(save2file)
+  if (save2file && is.null(save_dir)) {
+    save_dir <- file.path(tempdir(), "RTLbase_alg4")
+  }
+  if (save2file) {
+    dir.create(save_dir, recursive = TRUE, showWarnings = FALSE)
+  }
+
+  palette <- ColorTheme()
+  col_vector <- palette$col_vector
+
   n_testSets = length(task_list)
 
+  alg3_intercepts <- if (inherits(alg3_result, "rtl_alg3_result")) alg3_result$intercepts else alg3_result
+  if (is.null(alg3_intercepts)) {
+    stop("alg3_result must supply intercept updates.", call. = FALSE)
+  }
+  if (length(alg3_intercepts) < n_testSets) {
+    stop("alg3_result must contain an intercept for each task.", call. = FALSE)
+  }
 
-  print("starting Alg 4, Bias Update Base Version. No. of test sets:")
-  print(n_testSets)
+
+  if(verbose) {
+    message("starting Alg 4, Bias Update Base Version. No. of test sets:")
+    message(n_testSets)
+  }
 
 
   task_hat_outputs <- map_with_backend(seq_len(n_testSets), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(m){
@@ -119,7 +144,7 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
     if(CoreClassifier == "LinSVM"){
       task_hat_norm_upd <- as.matrix(TASK) %*% c(-alg2_result$U_robust[-length(alg2_result$U_robust)],
-                                                 alg3_result[m])
+                                                 alg3_intercepts[m])
     }
 
 
@@ -148,7 +173,7 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
       if(length(xyDF.sub$y) > 3){
         if (save2file){
-          fileID = paste(BaseFigDIR, "/alg4_RCS_DensFocPT_",m, ".png",sep="" )
+          fileID = file.path(save_dir, paste0("alg4_RCS_DensFocPT_", m, ".png"))
           png(fileID, width = 1024*2, height = 768*2, units = "px")
           par(mfrow=c(2,2))
           plot(xyDF, xlab="yhat", ylab="density", main=paste("PT thresholded set in red\nMarginal Freq from training: %", round(aprioriMedianFreq*100,3), sep=""), pch=19, col="grey")
@@ -184,7 +209,7 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
   task_hat_Z <- lapply(task_hat_outputs, function(x) x$task_hat_Z)
 
   bias_outputs <- map_with_backend(seq_len(n_testSets), use_parallel = use_parallel, parallel_cores = parallel_cores, FUN = function(tn){
-    print(paste("Starting Bias Update on test set #", tn, sep=""))
+    if(verbose) message(paste("Starting Bias Update on test set #", tn, sep=""))
 
     if(!ZnormMappingBL) z_i <- task_hat_norm_upd[[tn]]
     if(ZnormMappingBL) z_i <- task_hat_Z[[tn]]
@@ -198,7 +223,7 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
     c_j <- colSums(distance_grid < Marg)
 
     names(c_j) <- 1:length(c_j)
-    print("counting within margin complete")
+    if(verbose) message("counting within margin complete")
 
     h_bandwidth_val <- round(KBand_fx(s_k=s_j, c_k=c_j), 9)
 
@@ -333,7 +358,7 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
 
     if(save2file){
-      fileID = paste(BaseFigDIR, "/alg4_KeyOptima_", names(task_list)[tn], "_", round(h_bandwidth_val,4), ".png",sep="" )
+      fileID = file.path(save_dir, paste0("alg4_KeyOptima_", names(task_list)[tn], "_", round(h_bandwidth_val,4), ".png"))
       png(fileID, width = 1024, height = 768, units = "px")
 
       plot(as.data.frame(cbind(s_j, c_j)), typ="l", lwd=2, col="grey")
@@ -343,7 +368,7 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
       lines(Gaus_Ker_Smooth_sj_cj.DF, type="l", col="dodgerblue", lwd=2,
             main=paste("Key Local Optima on test sample: ",names(task_list)[tn] , sep=""),
             xlim=range(min(Gaus_Ker_Smooth_sj_cj$x),max(Gaus_Ker_Smooth_sj_cj$x)));
-      abline(v=-alg3_result[tn], col="dodgerblue", lwd=2)
+      abline(v=-alg3_intercepts[tn], col="dodgerblue", lwd=2)
       abline(v=-alg2_result$U_robust["b.int"], col="forestgreen", lty=2, lwd=2);
       abline(v=SMmin.ls$PeakA, col="orange", lwd=2);
       abline(v=SMmin.ls$PeakB, col="orange", lwd=2);
@@ -363,7 +388,7 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
     s_j_KeyOptima <- c(LocMin = SMmin.ls$Minima, peakYB = SMmin.ls$PeakB, peakYA = SMmin.ls$PeakA )
     names(s_j_KeyOptima) <- c("LocMin","peakYB","peakYA")
 
-    as.data.frame(cbind(alg3_b_upd=alg3_result[tn], alg4_b_upd = (s_j_KeyOptima[c("LocMin")])))
+    as.data.frame(cbind(alg3_b_upd=alg3_intercepts[tn], alg4_b_upd = (s_j_KeyOptima[c("LocMin")])))
   })
 
   SVM_b_all.df <- rbindlist(bias_outputs)
@@ -376,6 +401,9 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
                                            nrow(SVM_b_all.df)), SVM_b_all.df))
   colnames(SVM_b_all.df) <- c("b_alg2_norm", "b_alg3_norm", "b_alg_norm")
   rownames(SVM_b_all.df) <- paste("Task", 1:nrow(SVM_b_all.df), sep="")
+
+  class(SVM_b_all.df) <- c("rtl_alg4_result", class(SVM_b_all.df))
+  attr(SVM_b_all.df, "metadata") <- list(margin = Marg, core_classifier = CoreClassifier)
 
   return(SVM_b_all.df)
 
