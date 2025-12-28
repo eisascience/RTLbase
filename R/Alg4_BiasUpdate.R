@@ -95,6 +95,7 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
     #if(!exists("m"))   m = 1
 
     TASK <- as.data.frame(task_list[[m]])
+    if(anyNA(TASK)) stop("Task data contains missing values; please clean inputs before bias update.")
 
     #boxplot(TASK, las=2)
     #violinMyDF(TASK)
@@ -518,7 +519,6 @@ alg4_BiasUpdate <- function(task_list, alg1_result, alg2_result,
 
 
 }
-
 
 
 
